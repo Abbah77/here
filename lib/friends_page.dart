@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:here/providers/auth_provider.dart';
 // Note: Ensure this provider exists or comment out if not used yet
 // import 'package:here/providers/friends_provider.dart'; 
-import 'package:here/widgets/friend_request_card.dart';
-import 'package:here/widgets/friend_tile.dart';
-import 'package:here/widgets/suggestion_card.dart';
+import 'package:here/widget/friend_request_card.dart';
+import 'package:here/widget/friend_tile.dart';
+import 'package:here/widget/suggestion_card.dart';
 import 'package:here/profile.dart';
 
 enum FriendsTab { all, online, requests, suggestions }
