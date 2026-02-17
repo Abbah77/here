@@ -139,7 +139,8 @@ class EventCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            // FIXED: Changed withValues to withOpacity
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           )
@@ -221,7 +222,6 @@ class EventCard extends StatelessWidget {
   }
 }
 
-// Sub-components for cleaner structure
 class _AttendeeRow extends StatelessWidget {
   final Event event;
   const _AttendeeRow({required this.event});
