@@ -141,17 +141,17 @@ class _StoryViewerState extends State<StoryViewer> with TickerProviderStateMixin
                               builder: (context, child) {
                                 return LinearProgressIndicator(
                                   value: _progressController.value,
-                                  // UPDATED: withValues instead of withOpacity
-                                  backgroundColor: Colors.white.withValues(alpha: 0.3),
+                                  // FIXED: Changed withValues to withOpacity
+                                  backgroundColor: Colors.white.withOpacity(0.3),
                                   valueColor: const AlwaysStoppedAnimation(Colors.white),
                                 );
                               },
                             )
                           : Container(
-                              // UPDATED: withValues instead of withOpacity
+                              // FIXED: Changed withValues to withOpacity
                               color: index < _currentIndex
                                   ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.3),
+                                  : Colors.white.withOpacity(0.3),
                             ),
                     ),
                   );
@@ -186,8 +186,8 @@ class _StoryViewerState extends State<StoryViewer> with TickerProviderStateMixin
                         Text(
                           _getTimeAgo(story.timestamp),
                           style: TextStyle(
-                            // UPDATED: withValues instead of withOpacity
-                            color: Colors.white.withValues(alpha: 0.7),
+                            // FIXED: Changed withValues to withOpacity
+                            color: Colors.white.withOpacity(0.7),
                             fontSize: 12,
                           ),
                         ),
