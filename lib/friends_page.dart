@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:here/providers/auth_provider.dart';
-// Note: Ensure this provider exists or comment out if not used yet
+// Note: Ensure these providers are correctly defined in your main.dart
 // import 'package:here/providers/friends_provider.dart'; 
 import 'package:here/widget/friend_request_card.dart';
 import 'package:here/widget/friend_tile.dart';
@@ -25,7 +25,7 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
   bool _isSearching = false;
   FriendsTab _selectedTab = FriendsTab.all;
 
-  // Mock data preserved from your snippet
+  // Mock data preserved from your original structure
   final List<Map<String, dynamic>> _friendRequests = [
     {
       'id': '1',
@@ -33,7 +33,6 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
       'username': '@emmawatson',
       'image': 'https://randomuser.me/api/portraits/women/44.jpg',
       'mutualFriends': 12,
-      'mutualFriendsList': ['John', 'Sarah'],
       'mutualImages': ['https://randomuser.me/api/portraits/men/32.jpg'],
       'timeAgo': '2 min ago',
     },
@@ -48,7 +47,9 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
       'isOnline': true,
       'lastActive': 'Online',
       'isCloseFriend': true,
+      'isFavorite': true,
       'hasStory': true,
+      'mutualFriends': 15,
     },
   ];
 
@@ -58,7 +59,10 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
       'name': 'Alex Turner',
       'username': '@alexturner',
       'image': 'https://randomuser.me/api/portraits/men/6.jpg',
+      'mutualFriends': 18,
+      'mutualImages': ['https://randomuser.me/api/portraits/men/1.jpg'],
       'reason': 'Suggested for you',
+      'isVerified': true,
     },
   ];
 
@@ -146,34 +150,52 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
           children: [
             if (_friends.any((f) => f['isCloseFriend'] == true)) _buildCloseFriendsSection(colors),
             if (filteredFriends.isEmpty) _buildEmptyState(colors, 'No friends found') 
-            else ...filteredFriends.map((friend) => FriendTile(friend: friend)).toList(),
+            else ...filteredFriends.map((friend) => FriendTile(
+              friend: friend, 
+              colors: colors,
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
+              onMessage: () {},
+            )).toList(),
           ],
         );
 
       case FriendsTab.online:
         if (onlineFriends.isEmpty) return _buildEmptyState(colors, 'No friends online');
-        // FIXED: Added <Widget> type to map to resolve List<dynamic> error
         return Column(
-          children: onlineFriends.map<Widget>((friend) => FriendTile(friend: friend)).toList(),
+          children: onlineFriends.map<Widget>((friend) => FriendTile(
+            friend: friend, 
+            colors: colors,
+            onTap: () {},
+            onMessage: () {},
+          )).toList(),
         );
 
       case FriendsTab.requests:
         if (_friendRequests.isEmpty) return _buildEmptyState(colors, 'No requests');
-        // FIXED: Removed named arguments 'colors' and 'onDecline' if they aren't in your FriendRequestCard constructor
         return Column(
-          children: _friendRequests.map<Widget>((request) => FriendRequestCard(request: request)).toList(),
+          children: _friendRequests.map<Widget>((request) => FriendRequestCard(
+            request: request, 
+            colors: colors,
+            onAccept: () {},
+            onDecline: () {},
+            onViewProfile: () {},
+          )).toList(),
         );
 
       case FriendsTab.suggestions:
         if (_suggestions.isEmpty) return _buildEmptyState(colors, 'No suggestions');
-        // FIXED: Removed 'colors' argument to match SuggestionCard constructor
         return Column(
-          children: _suggestions.map<Widget>((suggestion) => SuggestionCard(suggestion: suggestion)).toList(),
+          children: _suggestions.map<Widget>((suggestion) => SuggestionCard(
+            suggestion: suggestion, 
+            colors: colors,
+            onAddFriend: () {},
+            onRemove: () {},
+          )).toList(),
         );
     }
   }
 
-  // Helper UI methods
+  // UI Helpers
   Widget _buildSearchField(ColorScheme colors) {
     return TextField(
       controller: _searchController,
@@ -189,7 +211,7 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
   Widget _buildTitleRow(ColorScheme colors) {
     return Row(
       children: [
-        Text('Friends', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+        Text('Friends', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 24)),
         const Spacer(),
         IconButton(icon: const Icon(Icons.search), onPressed: () => setState(() => _isSearching = true)),
       ],
@@ -199,21 +221,31 @@ class _FriendsPageState extends State<FriendsPage> with TickerProviderStateMixin
   Widget _buildCloseFriendsSection(ColorScheme colors) {
      final closeFriends = _friends.where((f) => f['isCloseFriend'] == true).toList();
      return Column(
+       crossAxisAlignment: CrossAxisAlignment.start,
        children: [
-         const Text('Close Friends'),
+         Text('Close Friends', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
+         const SizedBox(height: 12),
          SizedBox(
-           height: 80,
-           child: ListView(
+           height: 100,
+           child: ListView.builder(
              scrollDirection: Axis.horizontal,
-             children: closeFriends.map((f) => CircleAvatar(backgroundImage: NetworkImage(f['image']))).toList(),
+             itemCount: closeFriends.length,
+             itemBuilder: (context, index) => Container(
+               width: 80,
+               child: CircleAvatar(radius: 35, backgroundImage: NetworkImage(closeFriends[index]['image'])),
+             ),
            ),
          ),
+         const SizedBox(height: 20),
        ],
      );
   }
 
-  Widget _buildEmptyState(ColorScheme colors, String message, {IconData? icon}) {
-    return Center(child: Text(message));
+  Widget _buildEmptyState(ColorScheme colors, String message) {
+    return Center(child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Text(message, style: TextStyle(color: colors.onSurface.withOpacity(0.5))),
+    ));
   }
 }
 

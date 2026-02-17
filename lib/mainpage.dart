@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:here/notification.dart'; // Add this with your other imports
-import 'package:here/widgets/post_widget.dart'; // Fixed: widgets (plural)
-import 'package:here/widgets/story_widget.dart'; // Fixed: widgets (plural)
+import 'package:here/notification.dart'; 
+// FIXED: Changed 'widgets' to 'widget' to match your actual folder name
+import 'package:here/widget/post_widget.dart'; 
+import 'package:here/widget/story_widget.dart'; 
 import 'package:here/providers/post_provider.dart';
 import 'package:here/providers/story_provider.dart'; 
 
@@ -15,7 +16,8 @@ class MainPage extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     
     return Scaffold(
-      backgroundColor: colors.background,
+      // FIXED: background -> surface (compatibility fix)
+      backgroundColor: colors.surface,
       appBar: _buildAppBar(context, colors),
       body: Consumer<PostProvider>(
         builder: (context, postProvider, child) {
@@ -86,177 +88,66 @@ class MainPage extends StatelessWidget {
       elevation: 0,
       title: Row(
         children: [
-          Image.asset(
-            'images/logo.png',
-            height: 30,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                height: 30,
-                width: 30,
-                color: colors.primary,
-                child: Icon(Icons.person, color: colors.onPrimary, size: 20),
-              );
-            },
-          ),
+          // Using a placeholder icon since images/logo.png often causes build errors if missing from pubspec
+          Icon(Icons.bubble_chart, color: colors.primary, size: 30),
           const SizedBox(width: 10),
           Text(
-            'Socio Network',
-            style: GoogleFonts.lato(
+            'Here',
+            style: GoogleFonts.plusJakartaSans( // Changed to match your project font
               color: colors.onSurface,
-              fontSize: 16,
-              letterSpacing: 1,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
         ],
       ),
       actions: [
-  // Notification Icon
-  GestureDetector(
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const NotificationsPage(), // Your notification.dart
-        ),
-      );
-    },
-    child: Container(
-      margin: const EdgeInsets.only(right: 20),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        shape: BoxShape.circle,
-      ),
-      child: Stack(
-        children: [
-          Icon(
-            Icons.notifications_outlined,
-            color: colors.onSurface,
-            size: 20,
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                // FIXED: Constructor name must match the class in notification.dart
+                builder: (context) => const NotificationPage(), 
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(right: 20),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              // FIXED: surfaceContainerHighest -> surfaceVariant for compatibility
+              color: colors.surfaceVariant,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.notifications_outlined,
+              color: colors.onSurface,
+              size: 20,
+            ),
           ),
-          // Optional: Show notification badge if there are unread
-          // Positioned(
-          //   right: 0,
-          //   top: 0,
-          //   child: Container(
-          //     width: 8,
-          //     height: 8,
-          //     decoration: BoxDecoration(
-          //       color: colors.primary,
-          //       shape: BoxShape.circle,
-          //     ),
-          //   ),
-          // ),
-        ],
-      ),
-    ),
-  ),
-],
+        ),
+      ],
     );
   }
 
   Widget _buildErrorState(BuildContext context, ColorScheme colors, PostProvider postProvider) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 80,
-              color: colors.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Oops! Something went wrong',
-              style: GoogleFonts.lato(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: colors.onBackground,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              postProvider.errorMessage ?? 'Failed to load posts',
-              style: GoogleFonts.lato(
-                fontSize: 14,
-                color: colors.onSurface,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => postProvider.loadPosts(refresh: true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colors.primary,
-                foregroundColor: colors.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-              ),
-              child: const Text('Try Again'),
-            ),
-          ],
-        ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 60, color: colors.error),
+          const SizedBox(height: 16),
+          Text('Failed to load posts', style: TextStyle(color: colors.onSurface)),
+          TextButton(
+            onPressed: () => postProvider.loadPosts(refresh: true),
+            child: const Text('Retry'),
+          )
+        ],
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context, ColorScheme colors) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.feed_outlined,
-              size: 80,
-              color: colors.primary.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No Posts Yet',
-              style: GoogleFonts.lato(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: colors.onBackground,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Be the first to share something!',
-              style: GoogleFonts.lato(
-                fontSize: 14,
-                color: colors.onSurface,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Create post feature coming soon!'),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: colors.primary,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colors.primary,
-                foregroundColor: colors.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-              ),
-              child: const Text('Create Post'),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const Center(child: Text('No Posts Yet'));
   }
 }

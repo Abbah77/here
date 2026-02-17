@@ -5,6 +5,9 @@ import 'package:here/providers/post_provider.dart';
 import 'package:here/providers/notification_provider.dart';
 import 'package:here/providers/chat_provider.dart';
 import 'package:here/splash_page.dart';
+import 'package:here/providers/friends_provider.dart';
+import 'package:here/providers/story_provider.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
