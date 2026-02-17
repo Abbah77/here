@@ -9,6 +9,7 @@ import 'package:here/profile.dart';
 import 'package:here/providers/auth_provider.dart';
 import 'package:here/providers/post_provider.dart';
 import 'package:here/providers/notification_provider.dart';
+import 'package:here/providers/event_provider.dart'; // Ensure this is imported
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => PostProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => EventProvider()), // Added for Meetup page
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -42,7 +44,8 @@ class MyApp extends StatelessWidget {
             foregroundColor: Colors.black,
           ),
           navigationBarTheme: NavigationBarThemeData(
-            indicatorColor: Colors.orange.withValues(alpha: 0.2), // FIXED: withOpacity warning
+            // FIXED: Changed withValues(alpha: 0.2) to withOpacity(0.2)
+            indicatorColor: Colors.orange.withOpacity(0.2), 
             labelTextStyle: WidgetStateProperty.all(
               const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
@@ -59,13 +62,15 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Watch only the status to avoid unnecessary rebuilds
+    // Select specific values to minimize build triggers
     final authStatus = context.select<AuthProvider, bool>((p) => p.isAuthenticated);
     final isLoading = context.select<AuthProvider, bool>((p) => p.isLoading);
 
     if (isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.orange),
+        ),
       );
     }
     
@@ -83,7 +88,7 @@ class MyNavigationBar extends StatefulWidget {
 class _MyNavigationBarState extends State<MyNavigationBar> {
   int _selectedIndex = 0;
   
-  // Pages are defined here to keep build method clean
+  // Const pages to optimize IndexedStack rebuilds
   final List<Widget> _pages = const [
     MainPage(),
     Profile(),
@@ -95,12 +100,13 @@ class _MyNavigationBarState extends State<MyNavigationBar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // IndexedStack preserves the scroll position of each page
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
       ),
       bottomNavigationBar: NavigationBar(
+        elevation: 8,
+        backgroundColor: Colors.white,
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) => setState(() => _selectedIndex = index),
         destinations: const [
