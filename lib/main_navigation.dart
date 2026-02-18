@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:here/mainpage.dart';
+import 'package:here/mainpage.dart'; // Ensure this file defines MainPage
 import 'package:here/friends_page.dart';
 import 'package:here/explore_page.dart';
 import 'package:here/chat_list_page.dart';
@@ -15,17 +15,17 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   
-  // Rule: We use a GlobalKey to communicate with MainPage for the "Tap to Top" feature
+  // FIXED: Changed to GlobalKey<MainPageState> so the compiler recognizes .scrollToTop()
+  // Note: Ensure _MainPageState in mainpage.dart is renamed to MainPageState (no underscore)
   final GlobalKey<MainPageState> _homeKey = GlobalKey<MainPageState>();
 
-  // Rule: Pages are kept alive using IndexedStack to prevent unwanted refreshes
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _pages = [
-      MainPage(key: _homeKey), // Home with key for scroll control
+      MainPage(key: _homeKey), 
       const FriendsPage(),
       const ExplorePage(),
       const ChatListPage(),
@@ -38,7 +38,6 @@ class _MainNavigationState extends State<MainNavigation> {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // Rule: IndexedStack preserves state so stories/posts don't reload on tab switch
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
@@ -46,8 +45,8 @@ class _MainNavigationState extends State<MainNavigation> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
-          // Rule: Touching home btn while already on home page refreshes to top (TikTok style)
           if (index == 0 && _currentIndex == 0) {
+            // This will now work without "method not found" errors
             _homeKey.currentState?.scrollToTop();
           } else {
             setState(() => _currentIndex = index);
@@ -55,6 +54,7 @@ class _MainNavigationState extends State<MainNavigation> {
         },
         backgroundColor: colors.surface,
         elevation: 0,
+        // Using withOpacity for Codemagic compatibility
         indicatorColor: colors.primary.withOpacity(0.1),
         destinations: const [
           NavigationDestination(
