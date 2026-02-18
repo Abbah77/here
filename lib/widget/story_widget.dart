@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:here/providers/story_provider.dart';
-import 'package:here/widget/story_viewer.dart'; // Fixed: widgets (plural)
+import 'package:google_fonts/google_fonts.dart';
+import '../providers/story_provider.dart';
+import 'story_viewer.dart';
 
 class StoryWidget extends StatelessWidget {
   const StoryWidget({super.key});
@@ -10,26 +10,27 @@ class StoryWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    
-    return Consumer<StoryProvider>(
-      builder: (context, storyProvider, child) {
-        if (storyProvider.isLoading) {
-          return SizedBox(
-            height: 120,
-            child: Center(
-              child: CircularProgressIndicator(
-                color: colors.primary,
-              ),
-            ),
-          );
-        }
 
-        final groupedStories = storyProvider.getStoriesGroupedByUser();
-        
-        return Container(
-          height: 120,
-          color: colors.surface, // Changed from Colors.white
-          child: ListView.builder(
+    return SizedBox(
+      height: 120,
+      child: Consumer<StoryProvider>(
+        builder: (context, storyProvider, _) {
+          if (storyProvider.isLoading) {
+            return Center(child: CircularProgressIndicator(color: colors.primary));
+          }
+
+          if (!storyProvider.hasStories) {
+            return Center(
+              child: Text(
+                'No stories available.',
+                style: TextStyle(color: colors.onSurface.withOpacity(0.7)),
+              ),
+            );
+          }
+
+          final groupedStories = storyProvider.getStoriesGroupedByUser();
+
+          return ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: groupedStories.length,
             itemBuilder: (context, index) {
@@ -38,7 +39,7 @@ class StoryWidget extends StatelessWidget {
               final userStories = entry.value;
               final firstStory = userStories.first;
               final hasUnviewed = storyProvider.hasUnviewedStories(userId);
-              
+
               return _buildStoryAvatar(
                 context,
                 colors: colors,
@@ -47,23 +48,32 @@ class StoryWidget extends StatelessWidget {
                 isMyStory: firstStory.isMyStory,
                 hasUnviewed: hasUnviewed,
                 onTap: () {
-                  storyProvider.markUserStoriesAsViewed(userId);
-                  
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => StoryViewer(
-                        userId: userId,
-                        initialStoryIndex: 0,
+                  if (firstStory.isMyStory) {
+                    if (userStories.isNotEmpty) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StoryViewer(userId: userId, initialStoryIndex: 0),
+                        ),
+                      );
+                    } else {
+                      Navigator.pushNamed(context, '/createStoryPage');
+                    }
+                  } else {
+                    storyProvider.markUserStoriesAsViewed(userId);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => StoryViewer(userId: userId, initialStoryIndex: 0),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 },
               );
             },
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -85,7 +95,7 @@ class StoryWidget extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Stack(
-              clipBehavior: Clip.none, // Allow add button to overflow
+              clipBehavior: Clip.none,
               children: [
                 // Story ring
                 Container(
@@ -95,9 +105,7 @@ class StoryWidget extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: hasUnviewed
-                          ? colors.primary
-                          : colors.outline,
+                      color: hasUnviewed ? colors.primary : colors.outline,
                       width: hasUnviewed ? 3 : 2,
                     ),
                   ),
@@ -106,15 +114,10 @@ class StoryWidget extends StatelessWidget {
                     child: CircleAvatar(
                       backgroundImage: NetworkImage(userImage),
                       radius: 30,
-                      onBackgroundImageError: (_, __) => Icon(
-                        Icons.person,
-                        color: colors.onSurface,
-                      ),
+                      onBackgroundImageError: (_, __) => Icon(Icons.person, color: colors.onSurface),
                     ),
                   ),
                 ),
-                
-                // Add story button (for user's own story)
                 if (isMyStory)
                   Positioned(
                     bottom: 0,
@@ -123,25 +126,11 @@ class StoryWidget extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: colors.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: colors.surface,
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colors.shadow.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                        border: Border.all(color: colors.surface, width: 2),
                       ),
                       child: const Padding(
                         padding: EdgeInsets.all(3.0),
-                        child: Icon(
-                          Icons.add,
-                          size: 16,
-                          color: Colors.white,
-                        ),
+                        child: Icon(Icons.add, size: 16, color: Colors.white),
                       ),
                     ),
                   ),
