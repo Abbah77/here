@@ -8,17 +8,12 @@ class StoryProvider with ChangeNotifier {
   StoryStatus _status = StoryStatus.initial;
   String? _errorMessage;
 
-  // Getters
   List<Story> get stories => List.unmodifiable(_stories);
   StoryStatus get status => _status;
-  String? get errorMessage => _errorMessage;
   bool get isLoading => _status == StoryStatus.loading;
-  bool get hasError => _status == StoryStatus.error;
 
-  // --- BUSINESS LOGIC ---
+  // --- STORY MANAGEMENT ---
 
-  /// Rule: Adds a new story and updates the UI immediately.
-  /// Fixed: Changed 'createdAt' to 'timestamp' to match your Story model.
   Future<bool> addStory({
     required String mediaUrl,
     required StoryMediaType mediaType,
@@ -35,7 +30,7 @@ class StoryProvider with ChangeNotifier {
         mediaType: mediaType,
         caption: caption,
         color: color,
-        timestamp: DateTime.now(), // Fixed field name
+        timestamp: DateTime.now(),
         isViewed: true, 
         isMyStory: true,
       );
@@ -44,83 +39,70 @@ class StoryProvider with ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('Error adding story: $e');
       return false;
     }
   }
 
-  /// Rule: Groups stories by user. 
-  /// Fixed: Updated sorting logic to use 'timestamp'.
+  void deleteStory(String idOrUserId) {
+    _stories.removeWhere((s) => s.id == idOrUserId || s.userId == idOrUserId);
+    notifyListeners();
+  }
+
+  // --- UI HELPERS ---
+
   List<MapEntry<String, List<Story>>> getStoriesGroupedByUser() {
     final Map<String, List<Story>> grouped = {};
+    // Only group friends here; 'current_user' is handled manually in the UI
+    final friendsStories = _stories.where((s) => s.userId != 'current_user');
 
-    for (var story in _stories) {
+    for (var story in friendsStories) {
       grouped.putIfAbsent(story.userId, () => []).add(story);
     }
 
-    // Sort individual user story stacks (newest first)
     for (var list in grouped.values) {
       list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     }
 
-    final entries = grouped.entries.toList();
+    return grouped.entries.toList()
+      ..sort((a, b) => b.value.first.timestamp.compareTo(a.value.first.timestamp));
+  }
 
-    // Prioritize My Story, then sort by latest activity
-    entries.sort((a, b) {
-      final aFirst = a.value.first;
-      final bFirst = b.value.first;
-      
-      if (aFirst.isMyStory) return -1;
-      if (bFirst.isMyStory) return 1;
-      
-      return bFirst.timestamp.compareTo(aFirst.timestamp);
-    });
+  List<Story> getStoriesByUser(String userId) {
+    return _stories.where((s) => s.userId == userId).toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  }
 
-    return entries;
+  bool hasUnviewedStories(String userId) {
+    return _stories.any((s) => s.userId == userId && !s.isViewed);
+  }
+
+  void markUserStoriesAsViewed(String userId) {
+    bool updated = false;
+    _stories = _stories.map((s) {
+      if (s.userId == userId && !s.isViewed) {
+        updated = true;
+        return s.copyWith(isViewed: true);
+      }
+      return s;
+    }).toList();
+    if (updated) notifyListeners();
   }
 
   Future<void> loadStories() async {
     if (_status == StoryStatus.loading) return;
-
     _status = StoryStatus.loading;
     notifyListeners();
-
     try {
       await Future.delayed(const Duration(milliseconds: 1200));
       _stories = _mockStoryData.map((data) => Story.fromJson(data)).toList();
       _status = StoryStatus.loaded;
     } catch (e) {
       _status = StoryStatus.error;
-      _errorMessage = 'Failed to sync stories';
     } finally {
       notifyListeners();
     }
   }
 
-  /// Rule: Used by the Story Viewer to play sequence.
-  List<Story> getStoriesByUser(String userId) {
-    return _stories.where((story) => story.userId == userId).toList()
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-  }
-
-  void markUserStoriesAsViewed(String userId) {
-    bool updated = false;
-    _stories = _stories.map((story) {
-      if (story.userId == userId && !story.isViewed) {
-        updated = true;
-        return story.copyWith(isViewed: true);
-      }
-      return story;
-    }).toList();
-
-    if (updated) notifyListeners();
-  }
-
-  bool hasUnviewedStories(String userId) {
-    return _stories.any((story) => story.userId == userId && !story.isViewed);
-  }
-
-  // --- MOCK DATA ---
   final List<Map<String, dynamic>> _mockStoryData = [
     {
       'id': '101',
@@ -142,19 +124,6 @@ class StoryProvider with ChangeNotifier {
       'mediaType': 'image',
       'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
       'isViewed': false,
-      'isMyStory': false,
-    },
-    {
-      'id': '103',
-      'userId': 'friend_2',
-      'userName': 'Tom Holland',
-      'userImage': 'https://randomuser.me/api/portraits/men/32.jpg',
-      'mediaUrl': '',
-      'mediaType': 'text',
-      'caption': 'Working on something big! 🎬',
-      'color': '0xFFFF6B6B',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
-      'isViewed': true,
       'isMyStory': false,
     },
   ];
