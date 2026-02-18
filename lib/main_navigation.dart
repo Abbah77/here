@@ -8,29 +8,32 @@ class MainNavigation extends StatefulWidget {
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation>
-    with SingleTickerProviderStateMixin {
+class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
-  bool _isHomeRefreshing = false;
+
+  // Keep a reference to MainPage
   late final MainPage _homePage = const MainPage();
 
-  // Animation for smooth spinner transition
-  late final AnimationController _iconController =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+  final List<Widget> _pages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _pages.add(_homePage);
+    // Add other pages if you have them
+    // _pages.add(ProfilePage());
+    // _pages.add(SettingsPage());
+  }
 
   void _onTap(int index) async {
     if (index == 0) {
-      // Home tapped
+      // Home icon tapped
       if (_currentIndex == 0) {
-        if (_isHomeRefreshing) return;
-
-        setState(() => _isHomeRefreshing = true);
-        _iconController.forward(); // Start spinner animation
-
-        await _homePage.scrollToTopAndRefresh();
-
-        _iconController.reverse(); // Stop spinner animation
-        setState(() => _isHomeRefreshing = false);
+        // Already on home: refresh
+        final state = _homePageKey.currentState;
+        if (state != null) {
+          await state.scrollToTopAndRefresh();
+        }
       } else {
         setState(() => _currentIndex = 0);
       }
@@ -39,50 +42,25 @@ class _MainNavigationState extends State<MainNavigation>
     }
   }
 
-  @override
-  void dispose() {
-    _iconController.dispose();
-    super.dispose();
-  }
+  // Key to access MainPageState
+  final GlobalKey<_MainPageState> _homePageKey = GlobalKey<_MainPageState>();
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      _homePage,
-      const Center(child: Text('Search Page')),
-      const Center(child: Text('Profile Page')),
-    ];
-
     return Scaffold(
-      body: pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          MainPage(key: _homePageKey), // attach key here
+          // Add other pages here
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTap,
-        items: [
-          BottomNavigationBarItem(
-            icon: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (child, animation) =>
-                  ScaleTransition(scale: animation, child: child),
-              child: _isHomeRefreshing
-                  ? SizedBox(
-                      key: const ValueKey('spinner'),
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.home, key: ValueKey('icon')),
-            ),
-            label: 'Home',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );

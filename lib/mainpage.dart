@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:here/providers/post_provider.dart';
+import 'package:here/providers/story_provider.dart';
 import 'package:here/widget/feed_widget.dart';
 
 class MainPage extends StatefulWidget {
@@ -11,36 +12,60 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  final ScrollController _feedScrollController = ScrollController();
+  final ScrollController _scrollController = ScrollController();
   bool _isRefreshing = false;
 
-  /// Called from MainNavigation when Home is tapped again
+  /// Call this from MainNavigation when home is tapped
   Future<void> scrollToTopAndRefresh() async {
     if (_isRefreshing) return;
 
     setState(() => _isRefreshing = true);
 
     // Animate scroll to top
-    if (_feedScrollController.hasClients) {
-      await _feedScrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-    }
+    await _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+    );
 
-    // Refresh posts
+    // Refresh posts & stories in parallel
     final postProvider = Provider.of<PostProvider>(context, listen: false);
-    await postProvider.loadPosts(refresh: true);
+    final storyProvider = Provider.of<StoryProvider>(context, listen: false);
+
+    await Future.wait([
+      postProvider.loadPosts(refresh: true),
+      storyProvider.loadStories(),
+    ]);
 
     setState(() => _isRefreshing = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FeedWidget(
-      scrollController: _feedScrollController,
-      isRefreshing: _isRefreshing,
+    final colors = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Here'),
+        centerTitle: true,
+        leading: IconButton(
+          icon: _isRefreshing
+              ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: colors.onPrimary,
+                    strokeWidth: 2.5,
+                  ),
+                )
+              : const Icon(Icons.home),
+          onPressed: scrollToTopAndRefresh,
+        ),
+      ),
+      body: FeedWidget(
+        scrollController: _scrollController,
+        isRefreshing: _isRefreshing,
+      ),
     );
   }
 }
