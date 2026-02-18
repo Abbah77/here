@@ -14,50 +14,85 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
-  
-  // Your 5 pages
-  static const List<Widget> _pages = [
-    MainPage(),      // Home
-    FriendsPage(),   // Friends
-    ExplorePage(),   // Explore
-    ChatListPage(),  // Chat
-    ProfilePage(),   // Profile
+  bool _isRefreshingHome = false; // For TikTok-style icon spinner
+
+  // Create Home page with callback
+  late final MainPage _homePage = MainPage(onHomeIconTap: _refreshHome);
+
+  late final List<Widget> _pages = [
+    _homePage,           // Home
+    const FriendsPage(),  // Friends
+    const ExplorePage(),  // Explore
+    const ChatListPage(), // Chat
+    const ProfilePage(),  // Profile
   ];
+
+  Future<void> _refreshHome() async {
+    if (_isRefreshingHome) return; // prevent double refresh
+
+    setState(() => _isRefreshingHome = true);
+
+    // Trigger MainPage's refresh logic
+    if (_homePage.onHomeIconTap != null) {
+      await _homePage.onHomeIconTap!();
+    }
+
+    setState(() => _isRefreshingHome = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    
+
     return Scaffold(
       body: _pages[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        onDestinationSelected: (index) {
+          if (_currentIndex == 0 && index == 0) {
+            // Already on Home → trigger TikTok-style refresh
+            _refreshHome();
+          } else {
+            setState(() => _currentIndex = index);
+          }
+        },
         backgroundColor: colors.surface,
-        elevation: 0, // Clean, flat design
-        indicatorColor: colors.primary.withOpacity(0.1), // Subtle indicator
-        destinations: const [
+        elevation: 0,
+        indicatorColor: colors.primary.withOpacity(0.1),
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
+            icon: _isRefreshingHome
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : const Icon(Icons.home_outlined),
+            selectedIcon: _isRefreshingHome
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : const Icon(Icons.home),
             label: 'Home',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.people_outline),
             selectedIcon: Icon(Icons.people),
             label: 'Friends',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.explore_outlined),
             selectedIcon: Icon(Icons.explore),
             label: 'Explore',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
             label: 'Chat',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
             label: 'Profile',
