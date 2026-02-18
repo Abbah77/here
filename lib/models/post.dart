@@ -13,7 +13,6 @@ class Post {
   final int comments;
   final int shares;
   final bool isLiked;
-  final bool isBookmarked;
   final PostType type;
   final Map<String, dynamic>? metadata;
 
@@ -28,14 +27,13 @@ class Post {
     required this.comments,
     required this.shares,
     required this.isLiked,
-    required this.isBookmarked,
     required this.type,
     this.imageUrl,
     this.imageUrls,
     this.metadata,
   });
 
-  /// Creates a copy of this Post with the given fields replaced by the new values.
+  // Rule: Cleaned copyWith for state management efficiency
   Post copyWith({
     String? id,
     String? userId,
@@ -49,7 +47,6 @@ class Post {
     int? comments,
     int? shares,
     bool? isLiked,
-    bool? isBookmarked,
     PostType? type,
     Map<String, dynamic>? metadata,
   }) {
@@ -66,37 +63,39 @@ class Post {
       comments: comments ?? this.comments,
       shares: shares ?? this.shares,
       isLiked: isLiked ?? this.isLiked,
-      isBookmarked: isBookmarked ?? this.isBookmarked,
       type: type ?? this.type,
       metadata: metadata ?? this.metadata,
     );
   }
 
+  // Rule: Simplified JSON parsing for real-time data sync
   factory Post.fromJson(Map<String, dynamic> json) {
     return Post(
-      id: json['id'] as String? ?? '',
-      userId: json['userId'] as String? ?? '',
-      userName: json['userName'] as String? ?? '',
-      userProfileImage: json['userProfileImage'] as String? ?? '',
-      content: json['content'] as String? ?? '',
-      imageUrl: json['imageUrl'] as String?,
-      imageUrls: json['imageUrls'] != null 
-          ? List<String>.from(json['imageUrls'] as List)
-          : null,
+      id: json['id']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      userName: json['userName']?.toString() ?? '',
+      userProfileImage: json['userProfileImage']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString(),
+      imageUrls: json['imageUrls'] != null ? List<String>.from(json['imageUrls']) : null,
       createdAt: json['createdAt'] != null 
-          ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
+          ? DateTime.tryParse(json['createdAt']) ?? DateTime.now() 
           : DateTime.now(),
-      likes: json['likes'] as int? ?? 0,
-      comments: json['comments'] as int? ?? 0,
-      shares: json['shares'] as int? ?? 0,
-      isLiked: json['isLiked'] as bool? ?? false,
-      isBookmarked: json['isBookmarked'] as bool? ?? false,
-      type: PostType.values.firstWhere(
-        (e) => e.name == json['type'],
-        orElse: () => PostType.image,
-      ),
-      metadata: json['metadata'] as Map<String, dynamic>?,
+      likes: json['likes'] ?? 0,
+      comments: json['comments'] ?? 0,
+      shares: json['shares'] ?? 0,
+      isLiked: json['isLiked'] ?? false,
+      type: _parsePostType(json['type']),
+      metadata: json['metadata'],
     );
+  }
+
+  static PostType _parsePostType(dynamic type) {
+    final t = type.toString().toLowerCase();
+    if (t.contains('multi')) return PostType.multiImage;
+    if (t.contains('video')) return PostType.video;
+    if (t.contains('image')) return PostType.image;
+    return PostType.text;
   }
 
   Map<String, dynamic> toJson() {
@@ -113,47 +112,23 @@ class Post {
       'comments': comments,
       'shares': shares,
       'isLiked': isLiked,
-      'isBookmarked': isBookmarked,
       'type': type.name,
       'metadata': metadata,
     };
   }
 
-  // Helpers
-  bool get hasImage => imageUrl?.isNotEmpty ?? false;
-  bool get hasMultipleImages => imageUrls?.isNotEmpty ?? false;
-  
+  // Rule: Luxury short-hand time format (2h, 1d, etc.)
   String get timeAgo {
-    final difference = DateTime.now().difference(createdAt);
-    if (difference.inDays > 365) return '${(difference.inDays / 365).floor()}y';
-    if (difference.inDays > 30) return '${(difference.inDays / 30).floor()}mo';
-    if (difference.inDays > 7) return '${(difference.inDays / 7).floor()}w';
-    if (difference.inDays > 0) return '${difference.inDays}d';
-    if (difference.inHours > 0) return '${difference.inHours}h';
-    if (difference.inMinutes > 0) return '${difference.inMinutes}m';
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inDays > 7) return '${(diff.inDays / 7).floor()}w';
+    if (diff.inDays > 0) return '${diff.inDays}d';
+    if (diff.inHours > 0) return '${diff.inHours}h';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m';
     return 'now';
   }
 
-  /// A template for a new/empty post
-  static Post get empty => Post(
-    id: '',
-    userId: '',
-    userName: '',
-    userProfileImage: '',
-    content: '',
-    createdAt: DateTime.now(),
-    likes: 0,
-    comments: 0,
-    shares: 0,
-    isLiked: false,
-    isBookmarked: false,
-    type: PostType.text,
-  );
-
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Post && runtimeType == other.runtimeType && id == other.id;
+  bool operator ==(Object other) => identical(this, other) || other is Post && id == other.id;
 
   @override
   int get hashCode => id.hashCode;

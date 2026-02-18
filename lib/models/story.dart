@@ -5,10 +5,10 @@ class Story {
   final String userId;
   final String userName;
   final String userImage;
-  final String mediaUrl;  // Image or video URL
+  final String mediaUrl; 
   final StoryMediaType mediaType;
   final String? caption;
-  final String? color;  // For text stories background color
+  final String? color; 
   final DateTime timestamp;
   final bool isViewed;
   final bool isMyStory;
@@ -27,7 +27,11 @@ class Story {
     this.isMyStory = false,
   });
 
-  // Copy with method for updating view status
+  // Rule: Logic to decide if we show the + button or the story ring
+  // If it's my story and I haven't uploaded anything "new" (unviewed), 
+  // the UI will show the + icon routing.
+  bool get shouldShowAddButton => isMyStory && !isViewed;
+
   Story copyWith({
     String? id,
     String? userId,
@@ -56,26 +60,29 @@ class Story {
     );
   }
 
-  // JSON serialization
   factory Story.fromJson(Map<String, dynamic> json) {
     return Story(
-      id: json['id'] as String? ?? '',
-      userId: json['userId'] as String? ?? '',
-      userName: json['userName'] as String? ?? '',
-      userImage: json['userImage'] as String? ?? '',
-      mediaUrl: json['mediaUrl'] as String? ?? '',
-      mediaType: StoryMediaType.values.firstWhere(
-        (e) => e.toString() == 'StoryMediaType.${json['mediaType']}',
-        orElse: () => StoryMediaType.image,
-      ),
-      caption: json['caption'] as String?,
-      color: json['color'] as String?,
+      id: json['id']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      userName: json['userName']?.toString() ?? '',
+      userImage: json['userImage']?.toString() ?? '',
+      mediaUrl: json['mediaUrl']?.toString() ?? '',
+      mediaType: _parseMediaType(json['mediaType']),
+      caption: json['caption'],
+      color: json['color'],
       timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
+          ? DateTime.tryParse(json['timestamp']) ?? DateTime.now()
           : DateTime.now(),
-      isViewed: json['isViewed'] as bool? ?? false,
-      isMyStory: json['isMyStory'] as bool? ?? false,
+      isViewed: json['isViewed'] ?? false,
+      isMyStory: json['isMyStory'] ?? false,
     );
+  }
+
+  static StoryMediaType _parseMediaType(dynamic type) {
+    final typeString = type.toString().toLowerCase();
+    if (typeString.contains('video')) return StoryMediaType.video;
+    if (typeString.contains('text')) return StoryMediaType.text;
+    return StoryMediaType.image;
   }
 
   Map<String, dynamic> toJson() {
@@ -85,7 +92,7 @@ class Story {
       'userName': userName,
       'userImage': userImage,
       'mediaUrl': mediaUrl,
-      'mediaType': mediaType.toString().split('.').last,
+      'mediaType': mediaType.name, // Simplified enum string
       'caption': caption,
       'color': color,
       'timestamp': timestamp.toIso8601String(),

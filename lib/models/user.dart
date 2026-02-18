@@ -9,15 +9,15 @@ class User {
   final int followers;
   final int following;
   final int posts;
-  final bool? isVerified;
+  final bool isVerified;
   final DateTime? createdAt;
   final DateTime? lastActive;
-  final UserStatus? status;
+  final UserStatus status;
   final String? phoneNumber;
   final String? website;
   final String? location;
-  final List<String>? interests;
-  final Map<String, dynamic>? socialLinks;
+  final List<String> interests;
+  final Map<String, dynamic> socialLinks;
 
   const User({
     required this.id,
@@ -28,18 +28,18 @@ class User {
     required this.followers,
     required this.following,
     required this.posts,
-    this.isVerified,
+    this.isVerified = false,
     this.createdAt,
     this.lastActive,
-    this.status,
+    this.status = UserStatus.offline,
     this.phoneNumber,
     this.website,
     this.location,
-    this.interests,
-    this.socialLinks,
+    this.interests = const [],
+    this.socialLinks = const {},
   });
 
-  // Comprehensive copyWith method
+  // Rule: High-performance copyWith for smooth state updates
   User copyWith({
     String? id,
     String? name,
@@ -80,41 +80,37 @@ class User {
     );
   }
 
-  // Factory constructor from JSON with improved null safety
+  // Rule: Safe JSON parsing with modern Enum support
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      profileImage: json['profileImage'] as String? ?? '',
-      bio: json['bio'] as String? ?? '',
-      followers: json['followers'] as int? ?? 0,
-      following: json['following'] as int? ?? 0,
-      posts: json['posts'] as int? ?? 0,
-      isVerified: json['isVerified'] as bool?,
-      createdAt: json['createdAt'] != null 
-          ? DateTime.tryParse(json['createdAt'] as String) 
-          : null,
-      lastActive: json['lastActive'] != null 
-          ? DateTime.tryParse(json['lastActive'] as String) 
-          : null,
-      status: json['status'] != null 
-          ? UserStatus.values.firstWhere(
-              (e) => e.toString() == 'UserStatus.${json['status']}',
-              orElse: () => UserStatus.offline,
-            )
-          : null,
-      phoneNumber: json['phoneNumber'] as String?,
-      website: json['website'] as String?,
-      location: json['location'] as String?,
-      interests: json['interests'] != null 
-          ? List<String>.from(json['interests'] as List)
-          : null,
-      socialLinks: json['socialLinks'] as Map<String, dynamic>?,
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      profileImage: json['profileImage']?.toString() ?? '',
+      bio: json['bio']?.toString() ?? '',
+      followers: json['followers'] ?? 0,
+      following: json['following'] ?? 0,
+      posts: json['posts'] ?? 0,
+      isVerified: json['isVerified'] ?? false,
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
+      lastActive: json['lastActive'] != null ? DateTime.tryParse(json['lastActive']) : null,
+      status: _parseStatus(json['status']),
+      phoneNumber: json['phoneNumber'],
+      website: json['website'],
+      location: json['location'],
+      interests: json['interests'] != null ? List<String>.from(json['interests']) : [],
+      socialLinks: json['socialLinks'] ?? {},
     );
   }
 
-  // To JSON method
+  static UserStatus _parseStatus(dynamic status) {
+    final s = status.toString().toLowerCase();
+    return UserStatus.values.firstWhere(
+      (e) => e.name == s,
+      orElse: () => UserStatus.offline,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -128,7 +124,7 @@ class User {
       'isVerified': isVerified,
       'createdAt': createdAt?.toIso8601String(),
       'lastActive': lastActive?.toIso8601String(),
-      'status': status?.toString().split('.').last,
+      'status': status.name,
       'phoneNumber': phoneNumber,
       'website': website,
       'location': location,
@@ -137,135 +133,46 @@ class User {
     };
   }
 
-  // Empty user for initial states
-  static const User empty = User(
-    id: '',
-    name: '',
-    email: '',
-    profileImage: '',
-    bio: '',
-    followers: 0,
-    following: 0,
-    posts: 0,
-  );
+  // --- PREMIUM HELPERS ---
 
-  // Mock user for development
-  static User get mockUser => User(
-    id: '1',
-    name: 'Allan Paterson',
-    email: 'allan@example.com',
-    profileImage: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-    bio: 'Flutter Developer | UI/UX Designer | Coffee Lover | Building awesome social experiences',
-    followers: 1247,
-    following: 892,
-    posts: 156,
-    isVerified: true,
-    createdAt: DateTime(2024, 1, 1),
-    lastActive: DateTime.now(),
-    status: UserStatus.online,
-    phoneNumber: '+1 234 567 890',
-    website: 'allanpaterson.dev',
-    location: 'San Francisco, CA',
-    interests: ['Flutter', 'UI/UX', 'Photography', 'Travel', 'Coffee'],
-    socialLinks: {
-      'twitter': 'twitter.com/allan',
-      'github': 'github.com/allan',
-      'linkedin': 'linkedin.com/in/allan',
-    },
-  );
-
-  // Helper getters
-  bool get hasProfileImage => profileImage.isNotEmpty;
-  bool get hasBio => bio.isNotEmpty;
-  bool get hasPhone => phoneNumber?.isNotEmpty ?? false;
-  bool get hasWebsite => website?.isNotEmpty ?? false;
-  bool get hasLocation => location?.isNotEmpty ?? false;
-  bool get hasInterests => interests?.isNotEmpty ?? false;
-  
-  String get initials {
-    if (name.isEmpty) return '?';
-    final parts = name.trim().split(' ');
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  // Concise Number Formatter (e.g., 1.2K, 5M)
+  String _formatCount(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return count.toString();
   }
 
-  String get formattedFollowers {
-    if (followers >= 1000000) {
-      return '${(followers / 1000000).toStringAsFixed(1)}M';
-    } else if (followers >= 1000) {
-      return '${(followers / 1000).toStringAsFixed(1)}K';
-    }
-    return followers.toString();
-  }
+  String get formattedFollowers => _formatCount(followers);
+  String get formattedFollowing => _formatCount(following);
+  String get formattedPosts => _formatCount(posts);
 
-  String get formattedFollowing {
-    if (following >= 1000000) {
-      return '${(following / 1000000).toStringAsFixed(1)}M';
-    } else if (following >= 1000) {
-      return '${(following / 1000).toStringAsFixed(1)}K';
-    }
-    return following.toString();
-  }
-
-  String get formattedPosts {
-    if (posts >= 1000000) {
-      return '${(posts / 1000000).toStringAsFixed(1)}M';
-    } else if (posts >= 1000) {
-      return '${(posts / 1000).toStringAsFixed(1)}K';
-    }
-    return posts.toString();
-  }
-
+  // Short-hand Activity Text (matches Post timeAgo style)
   String get lastActiveText {
     if (status == UserStatus.online) return 'Online';
     if (lastActive == null) return 'Offline';
     
-    final now = DateTime.now();
-    final difference = now.difference(lastActive!);
-
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${(difference.inDays / 7).floor()}w ago';
-    }
+    final diff = DateTime.now().difference(lastActive!);
+    if (diff.inDays > 7) return '${(diff.inDays / 7).floor()}w';
+    if (diff.inDays > 0) return '${diff.inDays}d';
+    if (diff.inHours > 0) return '${diff.inHours}h';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m';
+    return 'now';
   }
 
-  String get memberSince {
-    if (createdAt == null) return 'Unknown';
-    return '${createdAt!.month}/${createdAt!.year}';
+  String get initials {
+    final parts = name.trim().split(' ');
+    if (parts.isEmpty || name.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
   }
 
-  // Validation methods
-  bool get isComplete => 
-      id.isNotEmpty && 
-      name.isNotEmpty && 
-      email.isNotEmpty && 
-      profileImage.isNotEmpty;
-
-  bool get isNewUser => 
-      posts == 0 && 
-      followers == 0 && 
-      following == 0;
-
-  // Equality
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is User &&
-        other.id == id;
-  }
+  bool operator ==(Object other) => identical(this, other) || other is User && id == other.id;
 
   @override
   int get hashCode => id.hashCode;
 
-  @override
-  String toString() {
-    return 'User(id: $id, name: $name, email: $email, status: $status)';
-  }
+  static const User empty = User(
+    id: '', name: '', email: '', profileImage: '', bio: '', followers: 0, following: 0, posts: 0,
+  );
 }
