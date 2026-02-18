@@ -5,54 +5,33 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"  # Updated to Flutter 3.x requirement
-  flutter: ">=3.16.0"     # Specify minimum Flutter version
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.16.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  
-  # Core packages
+  provider: ^6.1.2
   cupertino_icons: ^1.0.8
-  provider: ^6.1.2        # Updated to latest Provider
-  
-  # UI & Styling
-  google_fonts: 6.1.0    # Latest with better performance
-  
-  # Networking
-  http: ^1.2.1            # Major update with better features
-  
-  # Maps & Location
-  flutter_map: ^6.1.2     # Major version update with null safety
-  latlong2: ^0.9.0        # Updated
-  
-  # Additional useful packages for social app
-  image_picker: ^1.0.7    # For profile pictures/image uploads
-  shared_preferences: ^2.2.2  # For local storage
-  intl: ^0.18.1           # For date formatting
-  cached_network_image: ^3.3.1  # For efficient image loading
-  pull_to_refresh: ^2.0.0  # For pull-to-refresh functionality
-  flutter_svg: ^2.0.10     # For SVG support
-  
-  # Timeline (keeping your timeline_tile)
-  timeline_tile: ^2.0.0    # Updated version
+  google_fonts: ^6.1.0
+  http: ^1.2.1
+  flutter_map: ^6.1.2
+  latlong2: ^0.9.0
+  image_picker: ^1.0.7
+  shared_preferences: ^2.2.2
+  intl: ^0.18.1
+  cached_network_image: ^3.3.1
+  pull_to_refresh: ^2.0.0
+  flutter_svg: ^2.0.10
+  timeline_tile: ^2.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.1    # Added for better code quality
+  flutter_lints: ^3.0.1
 
 flutter:
   uses-material-design: true
   
   assets:
-    - images/
-    # Add more asset folders as needed
-    # - assets/icons/
-    # - assets/images/
-  
-  # Optional: Add custom fonts if needed
-  # fonts:
-  #   - family: CustomFont
-  #     fonts:
-  #       - asset: fonts/CustomFont-Regular.ttf
+    - images/  # Matches your root folder: here/images/
