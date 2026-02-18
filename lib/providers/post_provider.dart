@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/post.dart';
-import '../models/post_type.dart';
+import 'package:here/models/post.dart';
+import 'package:here/models/post_type.dart';
 
 enum PostStatus { initial, loading, loaded, error, creating }
 
@@ -9,63 +9,78 @@ class PostProvider with ChangeNotifier {
   PostStatus _status = PostStatus.initial;
   String? _errorMessage;
 
-  // --- Getters ---
+  // Getters
   List<Post> get posts => List.unmodifiable(_posts);
   PostStatus get status => _status;
   String? get errorMessage => _errorMessage;
-
   bool get isLoading => _status == PostStatus.loading;
   bool get isCreating => _status == PostStatus.creating;
   bool get hasError => _status == PostStatus.error;
-  bool get hasPosts => _posts.isNotEmpty;
 
-  // --- Load posts (mock data) ---
+  // --- CORE LOGIC ---
+
   Future<void> loadPosts({bool refresh = false}) async {
+    if (_status == PostStatus.loading) return;
+
     if (refresh) _posts = [];
-    _updateStatus(PostStatus.loading);
+    _status = PostStatus.loading;
+    notifyListeners();
 
     try {
-      await Future.delayed(const Duration(seconds: 1));
-
-      // Map mock data to Post model
-      _posts = _mockData.map(_mapToPost).toList();
-
-      // Sort newest first
+      // Simulate network latency for a premium feel
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
+      _posts = _mockPostData.map((data) => Post.fromJson(data)).toList();
+      
+      // Sort by latest first
       _posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      _updateStatus(PostStatus.loaded);
-    } catch (_) {
-      _updateStatus(PostStatus.error, errorMessage: 'Failed to load posts.');
+      
+      _status = PostStatus.loaded;
+    } catch (e) {
+      _status = PostStatus.error;
+      _errorMessage = 'Could not sync the feed. Please try again.';
+    } finally {
+      notifyListeners();
     }
   }
 
-  // --- Create a new post ---
+  void toggleLike(String postId) {
+    final index = _posts.indexWhere((p) => p.id == postId);
+    if (index == -1) return;
+
+    final post = _posts[index];
+    final isCurrentlyLiked = post.isLiked;
+    
+    // Rule: Optimistic Update for "Instant" UI response
+    _posts[index] = post.copyWith(
+      isLiked: !isCurrentlyLiked,
+      likes: isCurrentlyLiked ? post.likes - 1 : post.likes + 1,
+    );
+    
+    notifyListeners();
+    
+    // Note: In a real backend, you would fire the API call here 
+    // and revert if the server fails.
+  }
+
   Future<bool> createPost({
     required String content,
     String? imageUrl,
     List<String>? imageUrls,
     required PostType type,
     Map<String, dynamic>? metadata,
-    String? userId,
-    String? userName,
-    String? userProfileImage,
   }) async {
-    if (content.isEmpty && type == PostType.text) {
-      _updateStatus(PostStatus.error, errorMessage: 'Post content cannot be empty.');
-      return false;
-    }
-
-    _updateStatus(PostStatus.creating);
+    _status = PostStatus.creating;
+    notifyListeners();
 
     try {
       await Future.delayed(const Duration(seconds: 1));
 
       final newPost = Post(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: userId ?? '1',
-        userName: userName ?? 'Allan Paterson',
-        userProfileImage: userProfileImage ??
-            'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
+        userId: 'current_user',
+        userName: 'Allan Paterson',
+        userProfileImage: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
         content: content,
         imageUrl: imageUrl,
         imageUrls: imageUrls,
@@ -74,139 +89,49 @@ class PostProvider with ChangeNotifier {
         comments: 0,
         shares: 0,
         isLiked: false,
-        isBookmarked: false,
         type: type,
         metadata: metadata,
       );
 
       _posts.insert(0, newPost);
-      _updateStatus(PostStatus.loaded);
+      _status = PostStatus.loaded;
       return true;
-    } catch (_) {
-      _updateStatus(PostStatus.error, errorMessage: 'Failed to create post.');
+    } catch (e) {
+      _status = PostStatus.error;
       return false;
+    } finally {
+      notifyListeners();
     }
   }
 
-  // --- Post actions ---
-  void toggleLike(String postId) {
+  void incrementCommentCount(String postId) {
     final index = _posts.indexWhere((p) => p.id == postId);
-    if (index == -1) return;
-
-    final post = _posts[index];
-    _posts[index] = post.copyWith(
-      isLiked: !post.isLiked,
-      likes: post.isLiked ? post.likes - 1 : post.likes + 1,
-    );
-    notifyListeners();
-  }
-
-  void toggleBookmark(String postId) {
-    final index = _posts.indexWhere((p) => p.id == postId);
-    if (index == -1) return;
-
-    _posts[index] = _posts[index].copyWith(isBookmarked: !_posts[index].isBookmarked);
-    notifyListeners();
-  }
-
-  void addComment(String postId) {
-    final index = _posts.indexWhere((p) => p.id == postId);
-    if (index == -1) return;
-
-    _posts[index] = _posts[index].copyWith(comments: _posts[index].comments + 1);
-    notifyListeners();
-  }
-
-  void sharePost(String postId) {
-    final index = _posts.indexWhere((p) => p.id == postId);
-    if (index == -1) return;
-
-    _posts[index] = _posts[index].copyWith(shares: _posts[index].shares + 1);
-    notifyListeners();
-  }
-
-  // --- Filters / helpers ---
-  List<Post> getPostsByUser(String userId) => _posts.where((p) => p.userId == userId).toList();
-  List<Post> getPostsByType(PostType type) => _posts.where((p) => p.type == type).toList();
-  List<Post> getBookmarkedPosts() => _posts.where((p) => p.isBookmarked).toList();
-
-  // --- Internal helpers ---
-  void _updateStatus(PostStatus status, {String? errorMessage}) {
-    _status = status;
-    if (errorMessage != null) _errorMessage = errorMessage;
-    notifyListeners();
-  }
-
-  Post _mapToPost(Map<String, dynamic> data) {
-    return Post(
-      id: data['id'],
-      userId: data['userId'],
-      userName: data['userName'],
-      userProfileImage: data['userProfileImage'],
-      content: data['content'] ?? '',
-      imageUrl: data['imageUrl'],
-      imageUrls: data['imageUrls']?.cast<String>(),
-      createdAt: DateTime.parse(data['createdAt']),
-      likes: data['likes'] ?? 0,
-      comments: data['comments'] ?? 0,
-      shares: data['shares'] ?? 0,
-      isLiked: data['isLiked'] ?? false,
-      isBookmarked: data['isBookmarked'] ?? false,
-      type: _typeFromString(data['type']),
-      metadata: data['metadata'],
-    );
-  }
-
-  PostType _typeFromString(String? type) {
-    switch (type) {
-      case 'image':
-        return PostType.image;
-      case 'multiImage':
-        return PostType.multiImage;
-      case 'video':
-        return PostType.video;
-      case 'link':
-        return PostType.link;
-      default:
-        return PostType.text;
+    if (index != -1) {
+      _posts[index] = _posts[index].copyWith(comments: _posts[index].comments + 1);
+      notifyListeners();
     }
   }
 
-  // --- Mock data ---
-  final List<Map<String, dynamic>> _mockData = [
+  // --- MOCK DATA ---
+  final List<Map<String, dynamic>> _mockPostData = [
     {
       'id': '1',
-      'userId': '1',
+      'userId': 'current_user',
       'userName': 'Allan Paterson',
-      'userProfileImage':
-          'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-      'content': 'Just finished building the new profile page! 🚀',
+      'userProfileImage': 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
+      'content': 'Just finished building the new social engine! 🚀',
       'type': 'text',
       'likes': 124,
       'comments': 23,
       'shares': 8,
-      'createdAt': '2024-01-15T10:30:00Z',
+      'createdAt': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
     },
     {
       'id': '2',
-      'userId': '1',
-      'userName': 'Allan Paterson',
-      'userProfileImage':
-          'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-      'content': 'Beautiful sunset today! 🌅',
-      'imageUrl': 'https://images.pexels.com/photos/2387873/pexels-photo-2387873.jpeg',
-      'type': 'image',
-      'likes': 89,
-      'comments': 12,
-      'shares': 3,
-      'createdAt': '2024-01-14T18:45:00Z',
-    },
-    {
-      'id': '3',
-      'userId': '2',
+      'userId': 'friend_1',
       'userName': 'Emma Watson',
       'userProfileImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'content': 'Working on some new designs!',
+      'content': 'Working on some new designs for the community.',
       'imageUrls': [
         'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
         'https://images.pexels.com/photos/1779487/pexels-photo-1779487.jpeg',
@@ -215,37 +140,20 @@ class PostProvider with ChangeNotifier {
       'likes': 156,
       'comments': 18,
       'shares': 5,
-      'createdAt': '2024-01-14T14:20:00Z',
+      'createdAt': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
     },
     {
-      'id': '4',
-      'userId': '3',
+      'id': '3',
+      'userId': 'friend_2',
       'userName': 'Tom Holland',
       'userProfileImage': 'https://randomuser.me/api/portraits/men/32.jpg',
-      'content': 'Check out my new video! 🎬',
-      'imageUrl': 'https://images.pexels.com/photos/34950/pexels-photo.jpg',
-      'type': 'video',
+      'content': 'Check out this view from set! 🎬',
+      'imageUrl': 'https://images.pexels.com/photos/2387873/pexels-photo-2387873.jpeg',
+      'type': 'image',
       'likes': 234,
       'comments': 45,
       'shares': 12,
-      'createdAt': '2024-01-13T09:15:00Z',
-    },
-    {
-      'id': '5',
-      'userId': '2',
-      'userName': 'Emma Watson',
-      'userProfileImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'content': 'Great article on Flutter development',
-      'imageUrl': 'https://images.pexels.com/photos/4207548/pexels-photo-4207548.jpeg',
-      'type': 'link',
-      'likes': 45,
-      'comments': 6,
-      'shares': 1,
-      'createdAt': '2024-01-12T16:40:00Z',
-      'metadata': {
-        'title': 'Flutter 3.16: What\'s New',
-        'link': 'https://flutter.dev/blog',
-      },
+      'createdAt': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
     },
   ];
 }

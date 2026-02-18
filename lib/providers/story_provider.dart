@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/story.dart';
+import 'package:here/models/story.dart';
 
 enum StoryStatus { initial, loading, loaded, error }
 
@@ -14,28 +14,10 @@ class StoryProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isLoading => _status == StoryStatus.loading;
   bool get hasError => _status == StoryStatus.error;
-  bool get hasStories => _stories.isNotEmpty;
 
-  // Load mock stories
-  Future<void> loadStories() async {
-    _setStatus(StoryStatus.loading);
+  // --- BUSINESS LOGIC ---
 
-    try {
-      await Future.delayed(const Duration(seconds: 1));
-
-      // Mock data
-      _stories = _mockStoryData.map((data) => _mapToStory(data)).toList();
-
-      // Sort newest first
-      _stories.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-      _setStatus(StoryStatus.loaded);
-    } catch (_) {
-      _setStatus(StoryStatus.error, errorMessage: 'Failed to load stories');
-    }
-  }
-
-  // Group stories by user
+  /// Rule: Returns stories grouped by user, ensuring 'Your Story' is always index 0.
   List<MapEntry<String, List<Story>>> getStoriesGroupedByUser() {
     final Map<String, List<Story>> grouped = {};
 
@@ -43,25 +25,58 @@ class StoryProvider with ChangeNotifier {
       grouped.putIfAbsent(story.userId, () => []).add(story);
     }
 
-    // Sort each user's stories and by latest story
-    grouped.forEach((key, value) => value.sort((a, b) => b.timestamp.compareTo(a.timestamp)));
+    // Sort individual user story stacks by time (newest first)
+    for (var list in grouped.values) {
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    }
+
     final entries = grouped.entries.toList();
-    entries.sort((a, b) => b.value.first.timestamp.compareTo(a.value.first.timestamp));
+
+    // Rule: Sort groups to prioritize current user, then by latest activity
+    entries.sort((a, b) {
+      final aFirst = a.value.first;
+      final bFirst = b.value.first;
+      
+      if (aFirst.isMyStory) return -1;
+      if (bFirst.isMyStory) return 1;
+      
+      return bFirst.timestamp.compareTo(aFirst.timestamp);
+    });
+
     return entries;
   }
 
-  // Stories by user
-  List<Story> getStoriesByUser(String userId) =>
-      _stories.where((s) => s.userId == userId).toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  Future<void> loadStories() async {
+    if (_status == StoryStatus.loading) return;
 
-  // Check if user has unviewed stories
-  bool hasUnviewedStories(String userId) =>
-      _stories.any((s) => s.userId == userId && !s.isViewed);
+    _status = StoryStatus.loading;
+    notifyListeners();
 
-  // Mark all stories of a user as viewed
+    try {
+      // Rule: Simulating network delay for a smooth 'Blur-Refresh' effect
+      await Future.delayed(const Duration(milliseconds: 1200));
+
+      // Using the refactored Model's factory for consistency
+      _stories = _mockStoryData.map((data) => Story.fromJson(data)).toList();
+      
+      _status = StoryStatus.loaded;
+    } catch (e) {
+      _status = StoryStatus.error;
+      _errorMessage = 'Failed to sync stories';
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Rule: Used by the Story Viewer to display a single user's sequence
+  List<Story> getStoriesByUser(String userId) {
+    return _stories.where((story) => story.userId == userId).toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp)); // Viewer plays oldest to newest
+  }
+
+  /// Rule: Triggers the Ring UI update (Color Gradient removal)
   void markUserStoriesAsViewed(String userId) {
     bool updated = false;
-
     _stories = _stories.map((story) {
       if (story.userId == userId && !story.isViewed) {
         updated = true;
@@ -73,116 +88,57 @@ class StoryProvider with ChangeNotifier {
     if (updated) notifyListeners();
   }
 
-  // Mark single story as viewed
-  void markStoryAsViewed(String storyId) {
-    final index = _stories.indexWhere((s) => s.id == storyId);
-    if (index != -1 && !_stories[index].isViewed) {
-      _stories[index] = _stories[index].copyWith(isViewed: true);
-      notifyListeners();
-    }
+  bool hasUnviewedStories(String userId) {
+    return _stories.any((story) => story.userId == userId && !story.isViewed);
   }
 
-  // Add a new story
-  Future<bool> addStory({
-    required String mediaUrl,
-    required StoryMediaType mediaType,
-    String? caption,
-    String? color,
-  }) async {
-    try {
-      final newStory = Story(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: '1', // current user
-        userName: 'Allan Paterson',
-        userImage: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-        mediaUrl: mediaUrl,
-        mediaType: mediaType,
-        caption: caption,
-        color: color,
-        timestamp: DateTime.now(),
-        isViewed: false,
-        isMyStory: true,
-      );
-
-      _stories.insert(0, newStory);
-      notifyListeners();
-      return true;
-    } catch (_) {
-      _errorMessage = 'Failed to add story';
-      return false;
-    }
-  }
-
-  // Helper: map mock data to Story
-  Story _mapToStory(Map<String, dynamic> data) => Story(
-        id: data['id'],
-        userId: data['userId'],
-        userName: data['userName'],
-        userImage: data['userImage'],
-        mediaUrl: data['mediaUrl'],
-        mediaType: _getMediaType(data['mediaType']),
-        caption: data['caption'],
-        color: data['color'],
-        timestamp: DateTime.parse(data['timestamp']),
-        isViewed: data['isViewed'] ?? false,
-        isMyStory: data['isMyStory'] ?? false,
-      );
-
-  StoryMediaType _getMediaType(String type) {
-    switch (type) {
-      case 'video':
-        return StoryMediaType.video;
-      case 'text':
-        return StoryMediaType.text;
-      default:
-        return StoryMediaType.image;
-    }
-  }
-
-  void _setStatus(StoryStatus status, {String? errorMessage}) {
-    _status = status;
-    if (errorMessage != null) _errorMessage = errorMessage;
-    notifyListeners();
-  }
-
-  // Mock story data
+  // --- MOCK DATA ---
+  // Ready to be replaced by a 'Firebase/Supabase' stream later
   final List<Map<String, dynamic>> _mockStoryData = [
     {
-      'id': '1',
-      'userId': '1',
+      'id': '101',
+      'userId': 'current_user',
       'userName': 'Allan Paterson',
-      'userImage':
-          'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
+      'userImage': 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
       'mediaUrl': 'https://images.pexels.com/photos/2387873/pexels-photo-2387873.jpeg',
       'mediaType': 'image',
-      'caption': 'Beautiful sunset! 🌅',
-      'timestamp': DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(),
+      'timestamp': DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String(),
       'isViewed': false,
       'isMyStory': true,
     },
     {
-      'id': '2',
-      'userId': '2',
+      'id': '102',
+      'userId': 'friend_1',
       'userName': 'Emma Watson',
       'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
       'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
       'mediaType': 'image',
-      'caption': 'Coffee time! ☕️',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
       'isViewed': false,
       'isMyStory': false,
     },
     {
-      'id': '3',
-      'userId': '3',
+      'id': '103',
+      'userId': 'friend_2',
       'userName': 'Tom Holland',
       'userImage': 'https://randomuser.me/api/portraits/men/32.jpg',
       'mediaUrl': '',
       'mediaType': 'text',
-      'caption': 'Having a great day! 🎬',
-      'color': '#FF6B6B',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
+      'caption': 'Working on something big! 🎬',
+      'color': '0xFFFF6B6B',
+      'timestamp': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
       'isViewed': true,
+      'isMyStory': false,
+    },
+    {
+      'id': '104',
+      'userId': 'friend_3',
+      'userName': 'Zendaya',
+      'userImage': 'https://randomuser.me/api/portraits/women/33.jpg',
+      'mediaUrl': 'https://images.pexels.com/photos/34950/pexels-photo.jpg',
+      'mediaType': 'image',
+      'timestamp': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
+      'isViewed': false,
       'isMyStory': false,
     },
   ];
