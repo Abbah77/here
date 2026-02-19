@@ -1,6 +1,9 @@
-// splash_page.dart (simplified)
+// splash_page.dart
 import 'package:flutter/material.dart';
-import 'package:here/auth_checker.dart'; // Import new file
+import 'package:provider/provider.dart';
+import 'package:here/providers/auth_provider.dart';
+import 'package:here/main_navigation.dart';
+import 'package:here/auth_page.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -11,7 +14,7 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   late final AnimationController _controller;
-  
+
   @override
   void initState() {
     super.initState();
@@ -19,16 +22,26 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1200),
       vsync: this,
     )..forward();
+
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
-    // Navigate after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AuthChecker()),
-        );
-      }
-    });
+    // Load token from SharedPreferences inside authProvider
+    await authProvider.loadToken(); // public method in AuthProvider
+
+    // Navigate based on authentication state
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => authProvider.isAuthenticated 
+            ? const MainNavigation()
+            : const AuthPage(),
+      ),
+    );
   }
 
   @override
@@ -39,7 +52,6 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Keep your beautiful animation code here
     return Scaffold(
       body: Center(
         child: FadeTransition(
@@ -51,7 +63,6 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Your logo and text here
                 Image.asset('images/logo.png', width: 120, height: 120),
                 const SizedBox(height: 16),
                 Text(
