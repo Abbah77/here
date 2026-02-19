@@ -26,6 +26,10 @@ dependencies:
   timeline_tile: ^2.0.0
   # ADD THIS LINE BELOW - DO NOT MISS IT
   flutter_markdown: ^0.6.18+2 
+  firebase_core: ^2.21.1
+  firebase_auth: ^4.9.3
+  cloud_firestore: ^4.17.5
+  firebase_storage: ^11.3.0
 
 dev_dependencies:
   flutter_test:
