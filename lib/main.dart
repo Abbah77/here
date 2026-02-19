@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+
 import 'package:here/providers/auth_provider.dart';
 import 'package:here/providers/post_provider.dart';
 import 'package:here/providers/notification_provider.dart';
 import 'package:here/providers/chat_provider.dart';
-import 'package:here/splash_page.dart';
 import 'package:here/providers/friends_provider.dart';
 import 'package:here/providers/story_provider.dart';
+import 'package:here/splash_page.dart';
 
-
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -20,14 +22,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-       providers: [
-  ChangeNotifierProvider(create: (_) => AuthProvider()),
-  ChangeNotifierProvider(create: (_) => PostProvider()),
-  ChangeNotifierProvider(create: (_) => NotificationProvider()),
-  ChangeNotifierProvider(create: (_) => FriendsProvider()), // Add this
-  ChangeNotifierProvider(create: (_) => ChatProvider()),    // Add this
-  ChangeNotifierProvider(create: (_) => StoryProvider()),   // Add this
-],
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PostProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => FriendsProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => StoryProvider()),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Here',
@@ -46,7 +48,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
         themeMode: ThemeMode.system,
-        home: const SplashPage(), // Always starts here
+        home: const SplashPage(),
       ),
     );
   }
