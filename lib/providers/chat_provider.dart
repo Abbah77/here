@@ -33,8 +33,11 @@ class Message {
   final MessageStatus status;
   final DateTime timestamp;
   final String? imageUrl;
-  final Map<String, dynamic>? metadata;
   final bool isMe;
+  // NEW: Fields for Quoted/Reply Messages
+  final String? replyToId;
+  final String? replyToContent;
+  final String? replyToUser;
 
   Message({
     required this.id,
@@ -47,9 +50,30 @@ class Message {
     required this.status,
     required this.timestamp,
     this.imageUrl,
-    this.metadata,
     required this.isMe,
+    this.replyToId,
+    this.replyToContent,
+    this.replyToUser,
   });
+
+  Message copyWith({MessageStatus? status, String? content}) {
+    return Message(
+      id: id,
+      chatId: chatId,
+      senderId: senderId,
+      senderName: senderName,
+      senderAvatar: senderAvatar,
+      content: content ?? this.content,
+      type: type,
+      status: status ?? this.status,
+      timestamp: timestamp,
+      imageUrl: imageUrl,
+      isMe: isMe,
+      replyToId: replyToId,
+      replyToContent: replyToContent,
+      replyToUser: replyToUser,
+    );
+  }
 }
 
 class Chat {
@@ -63,7 +87,7 @@ class Chat {
   final bool isPinned;
   final bool isMuted;
   final bool isTyping;
-  final DateTime? lastMessageTime;
+  final DateTime lastMessageTime;
 
   Chat({
     required this.id,
@@ -76,396 +100,167 @@ class Chat {
     this.isPinned = false,
     this.isMuted = false,
     this.isTyping = false,
-    this.lastMessageTime,
+    required this.lastMessageTime,
   });
+
+  Chat copyWith({
+    Message? lastMessage,
+    int? unreadCount,
+    bool? isTyping,
+    bool? isPinned,
+    bool? isMuted,
+    DateTime? lastMessageTime,
+  }) {
+    return Chat(
+      id: id,
+      type: type,
+      name: name,
+      avatar: avatar,
+      participants: participants,
+      lastMessage: lastMessage ?? this.lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
+      isPinned: isPinned ?? this.isPinned,
+      isMuted: isMuted ?? this.isMuted,
+      isTyping: isTyping ?? this.isTyping,
+      lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+    );
+  }
 }
 
 class ChatProvider with ChangeNotifier {
   List<Chat> _chats = [];
-  Map<String, List<Message>> _messages = {};
+  final Map<String, List<Message>> _messages = {};
   bool _isLoading = false;
-  String? _errorMessage;
+  String? _error;
 
-  // Getters
-  List<Chat> get chats => List.unmodifiable(_chats);
+  List<Chat> get chats => _chats;
   bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
+  String? get error => _error;
 
-  int get unreadCount => _chats.fold(0, (sum, chat) => sum + chat.unreadCount);
-  List<Chat> get pinnedChats => _chats.where((c) => c.isPinned).toList();
-  List<Chat> get unreadChats => _chats.where((c) => c.unreadCount > 0).toList();
+  // NEW: State for the message currently being replied to
+  Message? _replyingTo;
+  Message? get replyingTo => _replyingTo;
 
-  // Load all chats
+  void setReplyMessage(Message? message) {
+    _replyingTo = message;
+    notifyListeners();
+  }
+
   Future<void> loadChats() async {
+    if (_chats.isNotEmpty) return;
     _isLoading = true;
     notifyListeners();
-
     try {
-      await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
-      _loadMockChats();
-      
-      _isLoading = false;
-      notifyListeners();
-      
+      await Future.delayed(const Duration(seconds: 1));
+      _chats = _generateMockChats();
     } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Failed to load chats';
-      notifyListeners();
+      _error = e.toString();
     }
+    _isLoading = false;
+    notifyListeners();
   }
 
-  // Load messages for a specific chat
   Future<List<Message>> loadMessages(String chatId) async {
-    if (_messages.containsKey(chatId)) {
-      return _messages[chatId]!;
-    }
-
-    try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final messages = _loadMockMessages(chatId);
-      _messages[chatId] = messages;
-      return messages;
-      
-    } catch (e) {
-      _errorMessage = 'Failed to load messages';
-      return [];
-    }
+    if (_messages.containsKey(chatId)) return _messages[chatId]!;
+    final mockMessages = _generateMockMessages(chatId);
+    _messages[chatId] = mockMessages;
+    return mockMessages;
   }
 
-  // Send message
-  Future<Message> sendMessage({
-    required String chatId,
+  Future<void> sendMessage({
+    required String chatId, 
     required String content,
-    MessageType type = MessageType.text,
-    String? imageUrl,
   }) async {
-    final currentUser = _getCurrentUser(); // In real app, get from AuthProvider
-    
     final newMessage = Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: DateTime.now().toString(),
       chatId: chatId,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
+      senderId: 'me',
+      senderName: 'You',
+      senderAvatar: 'https://i.pravatar.cc/150?u=me',
       content: content,
-      type: type,
+      type: MessageType.text,
       status: MessageStatus.sending,
       timestamp: DateTime.now(),
-      imageUrl: imageUrl,
       isMe: true,
+      // NEW: Attach reply metadata if it exists
+      replyToId: _replyingTo?.id,
+      replyToContent: _replyingTo?.content,
+      replyToUser: _replyingTo?.senderName,
     );
 
-    // Add to messages list
-    if (!_messages.containsKey(chatId)) {
-      _messages[chatId] = [];
+    // Add to local state
+    if (_messages.containsKey(chatId)) {
+      _messages[chatId]!.insert(0, newMessage);
+    } else {
+      _messages[chatId] = [newMessage];
     }
-    _messages[chatId]!.insert(0, newMessage);
-    
-    // Update last message in chat list
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-    if (chatIndex != -1) {
-      _chats[chatIndex] = Chat(
-        id: _chats[chatIndex].id,
-        type: _chats[chatIndex].type,
-        name: _chats[chatIndex].name,
-        avatar: _chats[chatIndex].avatar,
-        participants: _chats[chatIndex].participants,
+
+    // Update list preview
+    final index = _chats.indexWhere((c) => c.id == chatId);
+    if (index != -1) {
+      _chats[index] = _chats[index].copyWith(
         lastMessage: newMessage,
-        unreadCount: 0,
-        isPinned: _chats[chatIndex].isPinned,
-        isMuted: _chats[chatIndex].isMuted,
-        isTyping: false,
         lastMessageTime: DateTime.now(),
       );
+      final chat = _chats.removeAt(index);
+      _chats.insert(0, chat);
     }
-    
+
+    // Clear reply state after sending
+    _replyingTo = null;
     notifyListeners();
 
-    // Simulate message being sent
-    Future.delayed(const Duration(seconds: 1), () {
-      final messageIndex = _messages[chatId]!.indexWhere((m) => m.id == newMessage.id);
-      if (messageIndex != -1) {
-        _messages[chatId]![messageIndex] = Message(
-          id: newMessage.id,
-          chatId: newMessage.chatId,
-          senderId: newMessage.senderId,
-          senderName: newMessage.senderName,
-          senderAvatar: newMessage.senderAvatar,
-          content: newMessage.content,
-          type: newMessage.type,
-          status: MessageStatus.sent,
-          timestamp: newMessage.timestamp,
-          imageUrl: newMessage.imageUrl,
-          isMe: true,
-        );
-        notifyListeners();
-      }
-    });
-
-    return newMessage;
+    // Mock server delivery
+    await Future.delayed(const Duration(milliseconds: 500));
+    _updateStatus(chatId, newMessage.id, MessageStatus.sent);
   }
 
-  // Set typing status
-  void setTyping(String chatId, bool isTyping) {
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-    if (chatIndex != -1) {
-      _chats[chatIndex] = Chat(
-        id: _chats[chatIndex].id,
-        type: _chats[chatIndex].type,
-        name: _chats[chatIndex].name,
-        avatar: _chats[chatIndex].avatar,
-        participants: _chats[chatIndex].participants,
-        lastMessage: _chats[chatIndex].lastMessage,
-        unreadCount: _chats[chatIndex].unreadCount,
-        isPinned: _chats[chatIndex].isPinned,
-        isMuted: _chats[chatIndex].isMuted,
-        isTyping: isTyping,
-        lastMessageTime: _chats[chatIndex].lastMessageTime,
-      );
+  void _updateStatus(String chatId, String id, MessageStatus status) {
+    final mIndex = _messages[chatId]?.indexWhere((m) => m.id == id) ?? -1;
+    if (mIndex != -1) {
+      _messages[chatId]![mIndex] = _messages[chatId]![mIndex].copyWith(status: status);
       notifyListeners();
     }
   }
 
-  // Mark chat as read
   void markAsRead(String chatId) {
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-    if (chatIndex != -1 && _chats[chatIndex].unreadCount > 0) {
-      _chats[chatIndex] = Chat(
-        id: _chats[chatIndex].id,
-        type: _chats[chatIndex].type,
-        name: _chats[chatIndex].name,
-        avatar: _chats[chatIndex].avatar,
-        participants: _chats[chatIndex].participants,
-        lastMessage: _chats[chatIndex].lastMessage,
-        unreadCount: 0,
-        isPinned: _chats[chatIndex].isPinned,
-        isMuted: _chats[chatIndex].isMuted,
-        isTyping: _chats[chatIndex].isTyping,
-        lastMessageTime: _chats[chatIndex].lastMessageTime,
-      );
+    final index = _chats.indexWhere((c) => c.id == chatId);
+    if (index != -1 && _chats[index].unreadCount > 0) {
+      _chats[index] = _chats[index].copyWith(unreadCount: 0);
       notifyListeners();
     }
   }
 
-  // Toggle pin
-  void togglePin(String chatId) {
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-    if (chatIndex != -1) {
-      _chats[chatIndex] = Chat(
-        id: _chats[chatIndex].id,
-        type: _chats[chatIndex].type,
-        name: _chats[chatIndex].name,
-        avatar: _chats[chatIndex].avatar,
-        participants: _chats[chatIndex].participants,
-        lastMessage: _chats[chatIndex].lastMessage,
-        unreadCount: _chats[chatIndex].unreadCount,
-        isPinned: !_chats[chatIndex].isPinned,
-        isMuted: _chats[chatIndex].isMuted,
-        isTyping: _chats[chatIndex].isTyping,
-        lastMessageTime: _chats[chatIndex].lastMessageTime,
-      );
-      notifyListeners();
-    }
-  }
-
-  // Toggle mute
-  void toggleMute(String chatId) {
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-    if (chatIndex != -1) {
-      _chats[chatIndex] = Chat(
-        id: _chats[chatIndex].id,
-        type: _chats[chatIndex].type,
-        name: _chats[chatIndex].name,
-        avatar: _chats[chatIndex].avatar,
-        participants: _chats[chatIndex].participants,
-        lastMessage: _chats[chatIndex].lastMessage,
-        unreadCount: _chats[chatIndex].unreadCount,
-        isPinned: _chats[chatIndex].isPinned,
-        isMuted: !_chats[chatIndex].isMuted,
-        isTyping: _chats[chatIndex].isTyping,
-        lastMessageTime: _chats[chatIndex].lastMessageTime,
-      );
-      notifyListeners();
-    }
-  }
-
-  // Search chats
-  List<Chat> searchChats(String query) {
-    if (query.isEmpty) return _chats;
-    return _chats.where((chat) {
-      return chat.name.toLowerCase().contains(query.toLowerCase());
-    }).toList();
-  }
-
-  // Mock data loading
-  void _loadMockChats() {
-    final now = DateTime.now();
-    
-    _chats = [
+  // --- MOCK DATA ---
+  List<Chat> _generateMockChats() {
+    return [
       Chat(
-        id: '1',
+        id: 'c1',
         type: ChatType.individual,
         name: 'Emma Watson',
-        avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-        participants: [
-          ChatUser(
-            id: '2',
-            name: 'Emma Watson',
-            avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-            isOnline: true,
-          ),
-        ],
-        lastMessage: Message(
-          id: 'm1',
-          chatId: '1',
-          senderId: '2',
-          senderName: 'Emma Watson',
-          senderAvatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-          content: 'Hey! Are we still meeting tomorrow?',
-          type: MessageType.text,
-          status: MessageStatus.read,
-          timestamp: now.subtract(const Duration(minutes: 5)),
-          isMe: false,
-        ),
-        unreadCount: 3,
+        avatar: 'https://i.pravatar.cc/150?u=emma',
+        participants: [ChatUser(id: 'u2', name: 'Emma', avatar: '', isOnline: true)],
+        unreadCount: 2,
         isPinned: true,
-        isMuted: false,
-        isTyping: false,
-        lastMessageTime: now.subtract(const Duration(minutes: 5)),
-      ),
-      Chat(
-        id: '2',
-        type: ChatType.group,
-        name: 'Design Team',
-        avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-        participants: [
-          ChatUser(
-            id: '3',
-            name: 'Tom Holland',
-            avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-            isOnline: true,
-          ),
-          ChatUser(
-            id: '4',
-            name: 'Zendaya',
-            avatar: 'https://randomuser.me/api/portraits/women/33.jpg',
-            isOnline: false,
-          ),
-        ],
+        lastMessageTime: DateTime.now().subtract(const Duration(minutes: 5)),
         lastMessage: Message(
-          id: 'm2',
-          chatId: '2',
-          senderId: '3',
-          senderName: 'Tom Holland',
-          senderAvatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-          content: 'Mike: I\'ve updated the mockups',
-          type: MessageType.text,
-          status: MessageStatus.delivered,
-          timestamp: now.subtract(const Duration(hours: 1)),
-          isMe: false,
+          id: 'm1', chatId: 'c1', senderId: 'u2', senderName: 'Emma',
+          senderAvatar: '', content: 'Did you see the new design?', 
+          type: MessageType.text, status: MessageStatus.read, 
+          timestamp: DateTime.now(), isMe: false
         ),
-        unreadCount: 0,
-        isPinned: true,
-        isMuted: false,
-        isTyping: true,
-        lastMessageTime: now.subtract(const Duration(hours: 1)),
-      ),
-      Chat(
-        id: '3',
-        type: ChatType.individual,
-        name: 'Tom Holland',
-        avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-        participants: [
-          ChatUser(
-            id: '3',
-            name: 'Tom Holland',
-            avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-            isOnline: true,
-          ),
-        ],
-        lastMessage: Message(
-          id: 'm3',
-          chatId: '3',
-          senderId: '1',
-          senderName: 'You',
-          senderAvatar: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-          content: 'Thanks for the help! 🎬',
-          type: MessageType.text,
-          status: MessageStatus.read,
-          timestamp: now.subtract(const Duration(hours: 3)),
-          isMe: true,
-        ),
-        unreadCount: 1,
-        isPinned: false,
-        isMuted: true,
-        isTyping: false,
-        lastMessageTime: now.subtract(const Duration(hours: 3)),
       ),
     ];
   }
 
-  List<Message> _loadMockMessages(String chatId) {
-    final now = DateTime.now();
-    
+  List<Message> _generateMockMessages(String chatId) {
     return [
       Message(
-        id: 'm1',
-        chatId: chatId,
-        senderId: '2',
-        senderName: 'Emma Watson',
-        senderAvatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-        content: 'Hey! How are you?',
-        type: MessageType.text,
-        status: MessageStatus.read,
-        timestamp: now.subtract(const Duration(minutes: 30)),
-        isMe: false,
-      ),
-      Message(
-        id: 'm2',
-        chatId: chatId,
-        senderId: '1',
-        senderName: 'You',
-        senderAvatar: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-        content: 'I\'m good! Just working on the new features.',
-        type: MessageType.text,
-        status: MessageStatus.read,
-        timestamp: now.subtract(const Duration(minutes: 28)),
-        isMe: true,
-      ),
-      Message(
-        id: 'm3',
-        chatId: chatId,
-        senderId: '2',
-        senderName: 'Emma Watson',
-        senderAvatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-        content: 'Sounds exciting! Can\'t wait to see them.',
-        type: MessageType.text,
-        status: MessageStatus.read,
-        timestamp: now.subtract(const Duration(minutes: 27)),
-        isMe: false,
-      ),
-      Message(
-        id: 'm4',
-        chatId: chatId,
-        senderId: '1',
-        senderName: 'You',
-        senderAvatar: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-        content: 'Check out this design!',
-        type: MessageType.image,
-        status: MessageStatus.read,
-        timestamp: now.subtract(const Duration(minutes: 25)),
-        imageUrl: 'https://via.placeholder.com/300',
-        isMe: true,
+        id: 'pm1', chatId: chatId, senderId: 'u2', senderName: 'Emma',
+        senderAvatar: '', content: 'Let me know what you think!', 
+        type: MessageType.text, status: MessageStatus.read, 
+        timestamp: DateTime.now().subtract(const Duration(minutes: 1)), isMe: false
       ),
     ];
-  }
-
-  ChatUser _getCurrentUser() {
-    return ChatUser(
-      id: '1',
-      name: 'You',
-      avatar: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-      isOnline: true,
-    );
   }
 }
