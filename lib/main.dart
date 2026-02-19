@@ -11,8 +11,18 @@ import 'package:here/providers/story_provider.dart';
 import 'package:here/auth_checker.dart';
 
 void main() async {
+  // Ensure Flutter is ready for platform calls
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  try {
+    // Initialize Firebase before the app starts
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase Initialization Error: $e");
+    // Even if Firebase fails, we let the app run so AuthChecker 
+    // can handle the error/timeout gracefully.
+  }
+
   runApp(const MyApp());
 }
 
@@ -33,21 +43,27 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Here',
+        // High-contrast clean Black/White theme
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.black,
+            primary: Colors.black,
             brightness: Brightness.light,
           ),
+          scaffoldBackgroundColor: Colors.white,
         ),
         darkTheme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.black,
+            primary: Colors.white,
             brightness: Brightness.dark,
           ),
+          scaffoldBackgroundColor: Colors.black,
         ),
         themeMode: ThemeMode.system,
+        // Points to your updated AuthChecker with the 5s timeout
         home: const AuthChecker(),
       ),
     );
