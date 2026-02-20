@@ -33,7 +33,10 @@ android {
 
     defaultConfig {
         applicationId = "com.example.here"
-        minSdk = flutter.minSdkVersion
+        
+        // FIXED: Firebase Auth 24+ requires minSdk 23 (Android 6.0)
+        minSdk = 23 
+        
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -44,6 +47,7 @@ android {
             // Changed from "debug" to "release" to use your permanent key
             signingConfig = signingConfigs.getByName("release")
             
+            // Standard release optimizations
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -59,6 +63,7 @@ flutter {
 }
 
 dependencies {
+    // Firebase BoM for compatible versions
     implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
