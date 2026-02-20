@@ -14,24 +14,25 @@ android {
 
     signingConfigs {
         create("release") {
-            // Reconstruct the keystore file from the Environment Variable
-            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")?.trim()
-            val keystoreFile = file("permanent-key-decoded.jks")
-            
-            if (keystoreBase64 != null && keystoreBase64.isNotEmpty()) {
-                // Decodes the string back into the binary file
-                val decodedBytes = Base64.getDecoder().decode(keystoreBase64.trim())
-                keystoreFile.writeBytes(decodedBytes)
-                storeFile = keystoreFile
-            } else {
-                // Local fallback
-                storeFile = file("permanent-key.jks")
-            }
+            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")
+            // We save it to a temporary location on the Codemagic build machine
+            val keystoreFile = file("${project.buildDir}/temporary_keystore.jks")
 
-            // Replace with your actual password from Cloud Shell
-            storePassword = "YOUR_PASSWORD_HERE" 
-            keyAlias = "my-alias"
-            keyPassword = "YOUR_PASSWORD_HERE"
+            if (!keystoreBase64.isNullOrEmpty()) {
+                try {
+                    // MimeDecoder is more robust against formatting issues
+                    val decodedBytes = Base64.getMimeDecoder().decode(keystoreBase64.trim())
+                    keystoreFile.writeBytes(decodedBytes)
+                    
+                    storeFile = keystoreFile
+                    // Replace these with your actual passwords
+                    storePassword = "Mummyyyy" 
+                    keyAlias = "my-alias"
+                    keyPassword = "Mummyyyy"
+                } catch (e: Exception) {
+                    throw GradleException("Keystore decoding failed. Check your KEYSTORE_BASE64 variable.")
+                }
+            }
         }
     }
 
@@ -46,6 +47,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.here"
+        // Required for modern Firebase Auth
         minSdk = 23 
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -70,6 +72,7 @@ flutter {
 }
 
 dependencies {
+    // Standard Firebase dependencies
     implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
