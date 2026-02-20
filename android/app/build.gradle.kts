@@ -15,7 +15,7 @@ android {
     signingConfigs {
         create("release") {
             // Reconstruct the keystore file from the Environment Variable
-            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")
+            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")?.trim()
             val keystoreFile = file("permanent-key-decoded.jks")
             
             if (keystoreBase64 != null && keystoreBase64.isNotEmpty()) {
