@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,18 +9,29 @@ plugins {
 
 android {
     namespace = "com.example.here"
-    // Updated to 35 to match your plugin requirements
     compileSdk = 35 
-    // Updated to match your Firebase NDK requirement from logs
     ndkVersion = "27.0.12077973" 
 
     signingConfigs {
         create("release") {
-            // This points to the permanent key you uploaded to GitHub
-            storeFile = file("permanent-key.jks")
-            storePassword = "YOUR_PASSWORD_HERE" // Put your Cloud Shell password here
+            // Logic to decode the Base64 string from Codemagic Environment Variables
+            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")
+            val keystoreFile = file("permanent-key-decoded.jks")
+            
+            if (keystoreBase64 != null && !keystoreBase64.isEmpty()) {
+                // This decodes your text string back into a real .jks file during the build
+                val decodedBytes = Base64.getDecoder().decode(keystoreBase64.trim())
+                keystoreFile.writeBytes(decodedBytes)
+                storeFile = keystoreFile
+            } else {
+                // Fallback to local file if variable is missing (for local testing)
+                storeFile = file("permanent-key.jks")
+            }
+
+            // Replace these with your actual passwords from Cloud Shell
+            storePassword = "YOUR_PASSWORD_HERE" 
             keyAlias = "my-alias"
-            keyPassword = "YOUR_PASSWORD_HERE" // Put your Cloud Shell password here
+            keyPassword = "YOUR_PASSWORD_HERE"
         }
     }
 
@@ -33,10 +46,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.here"
-        
-        // FIXED: Firebase Auth 24+ requires minSdk 23 (Android 6.0)
         minSdk = 23 
-        
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -44,10 +54,7 @@ android {
 
     buildTypes {
         release {
-            // Changed from "debug" to "release" to use your permanent key
             signingConfig = signingConfigs.getByName("release")
-            
-            // Standard release optimizations
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -63,7 +70,6 @@ flutter {
 }
 
 dependencies {
-    // Firebase BoM for compatible versions
     implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
