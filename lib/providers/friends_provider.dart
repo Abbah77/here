@@ -1,4 +1,6 @@
+// lib/providers/friends_provider.dart
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 enum FriendStatus { pending, accepted, blocked }
 enum OnlineStatus { online, offline, away }
@@ -53,6 +55,22 @@ class Friend {
       return lastActive!.toString().split(' ')[0];
     }
   }
+
+  factory Friend.fromJson(Map<String, dynamic> json) => Friend(
+    id: json['id'],
+    name: json['name'],
+    username: json['username'],
+    profileImage: json['profileImage'] ?? '',
+    onlineStatus: OnlineStatus.values[json['onlineStatus'] ?? 1],
+    lastActive: json['lastActive'] != null ? DateTime.parse(json['lastActive']) : null,
+    mutualFriends: json['mutualFriends'] ?? 0,
+    isCloseFriend: json['isCloseFriend'] ?? false,
+    isFavorite: json['isFavorite'] ?? false,
+    hasStory: json['hasStory'] ?? false,
+    status: FriendStatus.values[json['status'] ?? 1],
+    mutualFriendsList: json['mutualFriendsList']?.cast<String>(),
+    mutualFriendsImages: json['mutualFriendsImages']?.cast<String>(),
+  );
 }
 
 class FriendRequest {
@@ -92,6 +110,17 @@ class FriendRequest {
       return '${(difference.inDays / 7).floor()} week${(difference.inDays / 7).floor() > 1 ? 's' : ''} ago';
     }
   }
+
+  factory FriendRequest.fromJson(Map<String, dynamic> json) => FriendRequest(
+    id: json['id'],
+    name: json['name'],
+    username: json['username'],
+    profileImage: json['profileImage'] ?? '',
+    mutualFriends: json['mutualFriends'] ?? 0,
+    mutualFriendsList: List<String>.from(json['mutualFriendsList'] ?? []),
+    mutualFriendsImages: List<String>.from(json['mutualFriendsImages'] ?? []),
+    timestamp: DateTime.parse(json['timestamp']),
+  );
 }
 
 class FriendSuggestion {
@@ -116,9 +145,23 @@ class FriendSuggestion {
     required this.reason,
     required this.isVerified,
   });
+
+  factory FriendSuggestion.fromJson(Map<String, dynamic> json) => FriendSuggestion(
+    id: json['id'],
+    name: json['name'],
+    username: json['username'],
+    profileImage: json['profileImage'] ?? '',
+    mutualFriends: json['mutualFriends'] ?? 0,
+    mutualFriendsList: List<String>.from(json['mutualFriendsList'] ?? []),
+    mutualFriendsImages: List<String>.from(json['mutualFriendsImages'] ?? []),
+    reason: json['reason'] ?? 'Suggested for you',
+    isVerified: json['isVerified'] ?? false,
+  );
 }
 
 class FriendsProvider with ChangeNotifier {
+  final ApiService _api = ApiService();
+  
   List<Friend> _friends = [];
   List<FriendRequest> _friendRequests = [];
   List<FriendSuggestion> _suggestions = [];
@@ -144,60 +187,81 @@ class FriendsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
+      final response = await _api.get('friends/all');
       
+      _friends = (response['friends'] as List).map((f) => Friend.fromJson(f)).toList();
+      _friendRequests = (response['requests'] as List).map((r) => FriendRequest.fromJson(r)).toList();
+      _suggestions = (response['suggestions'] as List).map((s) => FriendSuggestion.fromJson(s)).toList();
+      
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Failed to load friends data';
+      
+      // Fallback to mock data
       _loadMockFriends();
       _loadMockFriendRequests();
       _loadMockSuggestions();
       
-      _isLoading = false;
-      notifyListeners();
-      
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Failed to load friends data';
       notifyListeners();
     }
   }
 
   // Accept friend request
-  void acceptFriendRequest(String requestId) {
-    final request = _friendRequests.firstWhere((r) => r.id == requestId);
-    _friendRequests.removeWhere((r) => r.id == requestId);
-    
-    // Add to friends list
-    final newFriend = Friend(
-      id: request.id,
-      name: request.name,
-      username: request.username,
-      profileImage: request.profileImage,
-      onlineStatus: OnlineStatus.offline,
-      lastActive: DateTime.now(),
-      mutualFriends: request.mutualFriends,
-      isCloseFriend: false,
-      isFavorite: false,
-      hasStory: false,
-      status: FriendStatus.accepted,
-      mutualFriendsList: request.mutualFriendsList,
-      mutualFriendsImages: request.mutualFriendsImages,
-    );
-    
-    _friends.insert(0, newFriend);
-    notifyListeners();
+  Future<void> acceptFriendRequest(String requestId) async {
+    try {
+      await _api.post('friends/accept/$requestId', {});
+      
+      final request = _friendRequests.firstWhere((r) => r.id == requestId);
+      _friendRequests.removeWhere((r) => r.id == requestId);
+      
+      final newFriend = Friend(
+        id: request.id,
+        name: request.name,
+        username: request.username,
+        profileImage: request.profileImage,
+        onlineStatus: OnlineStatus.offline,
+        lastActive: DateTime.now(),
+        mutualFriends: request.mutualFriends,
+        isCloseFriend: false,
+        isFavorite: false,
+        hasStory: false,
+        status: FriendStatus.accepted,
+        mutualFriendsList: request.mutualFriendsList,
+        mutualFriendsImages: request.mutualFriendsImages,
+      );
+      
+      _friends.insert(0, newFriend);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to accept request';
+      notifyListeners();
+    }
   }
 
   // Decline friend request
-  void declineFriendRequest(String requestId) {
-    _friendRequests.removeWhere((r) => r.id == requestId);
-    notifyListeners();
+  Future<void> declineFriendRequest(String requestId) async {
+    try {
+      await _api.post('friends/decline/$requestId', {});
+      _friendRequests.removeWhere((r) => r.id == requestId);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to decline request';
+      notifyListeners();
+    }
   }
 
   // Send friend request
-  void sendFriendRequest(String userId) {
-    // In a real app, this would call an API
-    // For mock, we'll just remove from suggestions
-    _suggestions.removeWhere((s) => s.id == userId);
-    notifyListeners();
+  Future<void> sendFriendRequest(String userId) async {
+    try {
+      await _api.post('friends/request/$userId', {});
+      _suggestions.removeWhere((s) => s.id == userId);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to send request';
+      notifyListeners();
+    }
   }
 
   // Remove suggestion
@@ -207,50 +271,68 @@ class FriendsProvider with ChangeNotifier {
   }
 
   // Toggle close friend
-  void toggleCloseFriend(String friendId) {
+  Future<void> toggleCloseFriend(String friendId) async {
     final index = _friends.indexWhere((f) => f.id == friendId);
     if (index != -1) {
       final friend = _friends[index];
-      _friends[index] = Friend(
-        id: friend.id,
-        name: friend.name,
-        username: friend.username,
-        profileImage: friend.profileImage,
-        onlineStatus: friend.onlineStatus,
-        lastActive: friend.lastActive,
-        mutualFriends: friend.mutualFriends,
-        isCloseFriend: !friend.isCloseFriend,
-        isFavorite: friend.isFavorite,
-        hasStory: friend.hasStory,
-        status: friend.status,
-        mutualFriendsList: friend.mutualFriendsList,
-        mutualFriendsImages: friend.mutualFriendsImages,
-      );
-      notifyListeners();
+      final newValue = !friend.isCloseFriend;
+      
+      try {
+        await _api.patch('friends/$friendId', {'isCloseFriend': newValue});
+        
+        _friends[index] = Friend(
+          id: friend.id,
+          name: friend.name,
+          username: friend.username,
+          profileImage: friend.profileImage,
+          onlineStatus: friend.onlineStatus,
+          lastActive: friend.lastActive,
+          mutualFriends: friend.mutualFriends,
+          isCloseFriend: newValue,
+          isFavorite: friend.isFavorite,
+          hasStory: friend.hasStory,
+          status: friend.status,
+          mutualFriendsList: friend.mutualFriendsList,
+          mutualFriendsImages: friend.mutualFriendsImages,
+        );
+        notifyListeners();
+      } catch (e) {
+        _errorMessage = 'Failed to update friend';
+        notifyListeners();
+      }
     }
   }
 
   // Toggle favorite
-  void toggleFavorite(String friendId) {
+  Future<void> toggleFavorite(String friendId) async {
     final index = _friends.indexWhere((f) => f.id == friendId);
     if (index != -1) {
       final friend = _friends[index];
-      _friends[index] = Friend(
-        id: friend.id,
-        name: friend.name,
-        username: friend.username,
-        profileImage: friend.profileImage,
-        onlineStatus: friend.onlineStatus,
-        lastActive: friend.lastActive,
-        mutualFriends: friend.mutualFriends,
-        isCloseFriend: friend.isCloseFriend,
-        isFavorite: !friend.isFavorite,
-        hasStory: friend.hasStory,
-        status: friend.status,
-        mutualFriendsList: friend.mutualFriendsList,
-        mutualFriendsImages: friend.mutualFriendsImages,
-      );
-      notifyListeners();
+      final newValue = !friend.isFavorite;
+      
+      try {
+        await _api.patch('friends/$friendId', {'isFavorite': newValue});
+        
+        _friends[index] = Friend(
+          id: friend.id,
+          name: friend.name,
+          username: friend.username,
+          profileImage: friend.profileImage,
+          onlineStatus: friend.onlineStatus,
+          lastActive: friend.lastActive,
+          mutualFriends: friend.mutualFriends,
+          isCloseFriend: friend.isCloseFriend,
+          isFavorite: newValue,
+          hasStory: friend.hasStory,
+          status: friend.status,
+          mutualFriendsList: friend.mutualFriendsList,
+          mutualFriendsImages: friend.mutualFriendsImages,
+        );
+        notifyListeners();
+      } catch (e) {
+        _errorMessage = 'Failed to update friend';
+        notifyListeners();
+      }
     }
   }
 
@@ -263,7 +345,7 @@ class FriendsProvider with ChangeNotifier {
     }).toList();
   }
 
-  // Mock data loading
+  // Mock data loading (fallback)
   void _loadMockFriends() {
     _friends = [
       Friend(
@@ -278,85 +360,10 @@ class FriendsProvider with ChangeNotifier {
         isFavorite: true,
         hasStory: true,
         status: FriendStatus.accepted,
-        mutualFriendsList: ['John', 'Sarah', 'Mike', 'Anna', 'David', 'Lisa', 'Tom', 'Rachel', 'Chris', 'Emma', 'James', 'Sophie', 'Robert', 'Jennifer', 'William'],
+        mutualFriendsList: ['John', 'Sarah', 'Mike'],
         mutualFriendsImages: [
           'https://randomuser.me/api/portraits/men/32.jpg',
           'https://randomuser.me/api/portraits/women/22.jpg',
-          'https://randomuser.me/api/portraits/men/45.jpg',
-        ],
-      ),
-      Friend(
-        id: '2',
-        name: 'Tom Holland',
-        username: '@tomholland',
-        profileImage: 'https://randomuser.me/api/portraits/men/32.jpg',
-        onlineStatus: OnlineStatus.online,
-        lastActive: DateTime.now(),
-        mutualFriends: 8,
-        isCloseFriend: true,
-        isFavorite: true,
-        hasStory: true,
-        status: FriendStatus.accepted,
-        mutualFriendsList: ['Zendaya', 'Jacob', 'Robert', 'Emma', 'Chris'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/women/33.jpg',
-          'https://randomuser.me/api/portraits/men/22.jpg',
-        ],
-      ),
-      Friend(
-        id: '3',
-        name: 'Zendaya',
-        username: '@zendaya',
-        profileImage: 'https://randomuser.me/api/portraits/women/33.jpg',
-        onlineStatus: OnlineStatus.offline,
-        lastActive: DateTime.now().subtract(const Duration(hours: 2)),
-        mutualFriends: 12,
-        isCloseFriend: false,
-        isFavorite: true,
-        hasStory: false,
-        status: FriendStatus.accepted,
-        mutualFriendsList: ['Tom', 'Jacob', 'Emma'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/men/32.jpg',
-          'https://randomuser.me/api/portraits/women/44.jpg',
-        ],
-      ),
-      Friend(
-        id: '4',
-        name: 'Robert Downey Jr.',
-        username: '@robertdowney',
-        profileImage: 'https://randomuser.me/api/portraits/men/45.jpg',
-        onlineStatus: OnlineStatus.away,
-        lastActive: DateTime.now().subtract(const Duration(minutes: 30)),
-        mutualFriends: 23,
-        isCloseFriend: false,
-        isFavorite: false,
-        hasStory: true,
-        status: FriendStatus.accepted,
-        mutualFriendsList: ['Chris', 'Scarlett', 'Mark', 'Jennifer', 'Paul', 'Tom'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/men/8.jpg',
-          'https://randomuser.me/api/portraits/women/10.jpg',
-          'https://randomuser.me/api/portraits/men/11.jpg',
-        ],
-      ),
-      Friend(
-        id: '5',
-        name: 'Chris Evans',
-        username: '@chrisevans',
-        profileImage: 'https://randomuser.me/api/portraits/men/8.jpg',
-        onlineStatus: OnlineStatus.offline,
-        lastActive: DateTime.now().subtract(const Duration(days: 1)),
-        mutualFriends: 42,
-        isCloseFriend: false,
-        isFavorite: false,
-        hasStory: false,
-        status: FriendStatus.accepted,
-        mutualFriendsList: ['Robert', 'Scarlett', 'Mark', 'Jennifer'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/men/9.jpg',
-          'https://randomuser.me/api/portraits/women/10.jpg',
-          'https://randomuser.me/api/portraits/men/11.jpg',
         ],
       ),
     ];
@@ -370,26 +377,11 @@ class FriendsProvider with ChangeNotifier {
         username: '@scarlettj',
         profileImage: 'https://randomuser.me/api/portraits/women/10.jpg',
         mutualFriends: 18,
-        mutualFriendsList: ['Chris', 'Robert', 'Tom', 'Emma', 'Zendaya'],
+        mutualFriendsList: ['Chris', 'Robert'],
         mutualFriendsImages: [
           'https://randomuser.me/api/portraits/men/8.jpg',
-          'https://randomuser.me/api/portraits/women/44.jpg',
-          'https://randomuser.me/api/portraits/men/32.jpg',
         ],
         timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-      ),
-      FriendRequest(
-        id: '7',
-        name: 'Mark Ruffalo',
-        username: '@markruffalo',
-        profileImage: 'https://randomuser.me/api/portraits/men/9.jpg',
-        mutualFriends: 6,
-        mutualFriendsList: ['Robert', 'Chris'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/men/45.jpg',
-          'https://randomuser.me/api/portraits/men/8.jpg',
-        ],
-        timestamp: DateTime.now().subtract(const Duration(hours: 1)),
       ),
     ];
   }
@@ -402,42 +394,11 @@ class FriendsProvider with ChangeNotifier {
         username: '@alexturner',
         profileImage: 'https://randomuser.me/api/portraits/men/6.jpg',
         mutualFriends: 18,
-        mutualFriendsList: ['Emma', 'Tom', 'Zendaya', 'Chris'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/women/44.jpg',
-          'https://randomuser.me/api/portraits/men/32.jpg',
-          'https://randomuser.me/api/portraits/women/33.jpg',
-        ],
-        reason: 'Suggested for you',
-        isVerified: true,
-      ),
-      FriendSuggestion(
-        id: '9',
-        name: 'Lisa Anderson',
-        username: '@lisaanderson',
-        profileImage: 'https://randomuser.me/api/portraits/women/7.jpg',
-        mutualFriends: 6,
         mutualFriendsList: ['Emma', 'Tom'],
         mutualFriendsImages: [
           'https://randomuser.me/api/portraits/women/44.jpg',
-          'https://randomuser.me/api/portraits/men/32.jpg',
         ],
-        reason: 'Based on your interests',
-        isVerified: false,
-      ),
-      FriendSuggestion(
-        id: '10',
-        name: 'Chris Hemsworth',
-        username: '@chrishemsworth',
-        profileImage: 'https://randomuser.me/api/portraits/men/11.jpg',
-        mutualFriends: 42,
-        mutualFriendsList: ['Chris Evans', 'Robert', 'Scarlett', 'Mark'],
-        mutualFriendsImages: [
-          'https://randomuser.me/api/portraits/men/8.jpg',
-          'https://randomuser.me/api/portraits/women/10.jpg',
-          'https://randomuser.me/api/portraits/men/9.jpg',
-        ],
-        reason: 'Popular in your network',
+        reason: 'Suggested for you',
         isVerified: true,
       ),
     ];

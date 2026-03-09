@@ -1,8 +1,7 @@
+// lib/providers/chat_provider.dart
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 
 enum MessageStatus { sending, sent, delivered, read, error }
 enum MessageType { text, image, video, file, audio }
@@ -12,6 +11,14 @@ class ChatUser {
   final String id, name, avatar;
   final bool isOnline, isTyping;
   ChatUser({required this.id, required this.name, required this.avatar, this.isOnline = false, this.isTyping = false});
+  
+  factory ChatUser.fromJson(Map<String, dynamic> json) => ChatUser(
+    id: json['id'],
+    name: json['name'],
+    avatar: json['avatar'] ?? '',
+    isOnline: json['isOnline'] ?? false,
+    isTyping: json['isTyping'] ?? false,
+  );
 }
 
 class Message {
@@ -28,7 +35,6 @@ class Message {
     required this.timestamp, required this.isMe, this.replyToContent, this.replyToUser,
   });
 
-  // Required for the AI Typewriter effect
   Message copyWith({String? content, MessageStatus? status}) => Message(
     id: id, chatId: chatId, senderId: senderId, senderName: senderName,
     senderAvatar: senderAvatar, content: content ?? this.content, type: type,
@@ -37,17 +43,29 @@ class Message {
   );
 
   Map<String, dynamic> toJson() => {
-    'role': isMe ? 'user' : 'assistant',
+    'id': id,
+    'chatId': chatId,
+    'senderId': senderId,
+    'senderName': senderName,
     'content': content,
+    'type': type.index,
     'timestamp': timestamp.toIso8601String(),
+    'isMe': isMe,
   };
 
-  factory Message.fromJson(Map<String, dynamic> json, String chatId) => Message(
-    id: json['timestamp'], chatId: chatId, 
-    senderId: json['role'], senderName: json['role'] == 'user' ? 'You' : 'Here AI',
-    senderAvatar: json['role'] == 'user' ? '' : 'assets/images/logo.png',
-    content: json['content'], type: MessageType.text, status: MessageStatus.read,
-    timestamp: DateTime.parse(json['timestamp']), isMe: json['role'] == 'user',
+  factory Message.fromJson(Map<String, dynamic> json) => Message(
+    id: json['id'],
+    chatId: json['chatId'],
+    senderId: json['senderId'],
+    senderName: json['senderName'],
+    senderAvatar: json['senderAvatar'] ?? '',
+    content: json['content'],
+    type: MessageType.values[json['type']],
+    status: MessageStatus.values[json['status'] ?? 3], // Default to read
+    timestamp: DateTime.parse(json['timestamp']),
+    isMe: json['isMe'],
+    replyToContent: json['replyToContent'],
+    replyToUser: json['replyToUser'],
   );
 }
 
@@ -68,13 +86,26 @@ class Chat {
     id: id, name: name, avatar: avatar, type: type, participants: participants,
     lastMessage: lastMessage ?? this.lastMessage, unreadCount: unreadCount ?? this.unreadCount, isPinned: isPinned,
   );
+
+  factory Chat.fromJson(Map<String, dynamic> json) => Chat(
+    id: json['id'],
+    name: json['name'],
+    avatar: json['avatar'] ?? '',
+    type: ChatType.values[json['type']],
+    participants: (json['participants'] as List).map((p) => ChatUser.fromJson(p)).toList(),
+    lastMessage: Message.fromJson(json['lastMessage']),
+    unreadCount: json['unreadCount'] ?? 0,
+    isPinned: json['isPinned'] ?? false,
+  );
 }
 
 class ChatProvider with ChangeNotifier {
+  final ApiService _api = ApiService();
+  
   List<Chat> _chats = [];
   final Map<String, List<Message>> _messages = {};
   bool _isLoading = false;
-  bool _isAILoading = false; // For AI thinking state
+  bool _isAILoading = false;
   Message? _replyingTo;
 
   List<Chat> get chats => _chats;
@@ -83,18 +114,23 @@ class ChatProvider with ChangeNotifier {
   Message? get replyingTo => _replyingTo;
 
   static const String _aiChatId = 'ai_assistant';
-  static const String _aiStoreKey = 'here_ai_sessions';
 
-  // --- AI INTEGRATION (DEMO LOGIC) ---
-
+  // --- AI INTEGRATION ---
   Future<void> sendAIMessage(String content) async {
     _isAILoading = true;
     notifyListeners();
 
     final userMsg = Message(
-      id: DateTime.now().toIso8601String(), chatId: _aiChatId, senderId: 'user', senderName: 'You',
-      senderAvatar: '', content: content, type: MessageType.text, status: MessageStatus.sent,
-      timestamp: DateTime.now(), isMe: true,
+      id: DateTime.now().toIso8601String(), 
+      chatId: _aiChatId, 
+      senderId: 'user', 
+      senderName: 'You',
+      senderAvatar: '', 
+      content: content, 
+      type: MessageType.text, 
+      status: MessageStatus.sent,
+      timestamp: DateTime.now(), 
+      isMe: true,
     );
 
     _messages[_aiChatId] ??= [];
@@ -102,19 +138,24 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http.post(
-        Uri.parse("https://decodernet-servers.onrender.com/ReCore/chat"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(_messages[_aiChatId]!.reversed.map((e) => e.toJson()).toList()),
-      );
+      final response = await _api.post('ai/chat', {
+        'message': content,
+        'history': _messages[_aiChatId]!.map((e) => e.toJson()).toList(),
+      });
 
-      final aiText = jsonDecode(response.body)['response'] ?? "";
+      final aiText = response['response'] ?? "";
 
-      // Add empty AI bubble
       final aiMsg = Message(
-        id: 'ai_${DateTime.now().millisecondsSinceEpoch}', chatId: _aiChatId, senderId: 'assistant',
-        senderName: 'Here AI', senderAvatar: 'assets/images/logo.png', content: '', 
-        type: MessageType.text, status: MessageStatus.read, timestamp: DateTime.now(), isMe: false,
+        id: 'ai_${DateTime.now().millisecondsSinceEpoch}', 
+        chatId: _aiChatId, 
+        senderId: 'assistant',
+        senderName: 'Here AI', 
+        senderAvatar: 'assets/images/logo.png', 
+        content: '', 
+        type: MessageType.text, 
+        status: MessageStatus.read, 
+        timestamp: DateTime.now(), 
+        isMe: false,
       );
       _messages[_aiChatId]!.insert(0, aiMsg);
       _isAILoading = false;
@@ -136,40 +177,72 @@ class ChatProvider with ChangeNotifier {
   }
 
   Future<void> _saveAIHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final history = _messages[_aiChatId]?.map((e) => e.toJson()).toList() ?? [];
-    await prefs.setString(_aiStoreKey, jsonEncode(history));
+    try {
+      await _api.post('ai/history', {
+        'messages': _messages[_aiChatId]?.map((e) => e.toJson()).toList() ?? []
+      });
+    } catch (e) {
+      // Handle error silently
+    }
   }
 
   Future<void> loadAIHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_aiStoreKey);
-    if (raw != null) {
-      final List decoded = jsonDecode(raw);
-      _messages[_aiChatId] = decoded.map((e) => Message.fromJson(e, _aiChatId)).toList();
-      notifyListeners();
+    try {
+      final response = await _api.get('ai/history');
+      if (response['messages'] != null) {
+        _messages[_aiChatId] = (response['messages'] as List)
+            .map((m) => Message.fromJson(m))
+            .toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      // Handle error silently
     }
   }
 
   // --- STANDARD CHAT LOGIC ---
-
   Future<void> loadChats() async {
     _isLoading = true;
-    await Future.delayed(const Duration(milliseconds: 800)); // Simulate DB
-    _chats = _genMocks();
-    _isLoading = false;
     notifyListeners();
+    
+    try {
+      final response = await _api.get('chats');
+      _chats = (response['chats'] as List).map((c) => Chat.fromJson(c)).toList();
+    } catch (e) {
+      // Fallback to mock data if API fails
+      _chats = _genMocks();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<List<Message>> loadMessages(String chatId) async {
-    return _messages[chatId] ?? [];
+    try {
+      final response = await _api.get('chats/$chatId/messages');
+      _messages[chatId] = (response['messages'] as List)
+          .map((m) => Message.fromJson(m))
+          .toList();
+      return _messages[chatId]!;
+    } catch (e) {
+      return _messages[chatId] ?? [];
+    }
   }
 
   Future<void> sendMessage({required String chatId, required String content}) async {
     final msg = Message(
-      id: DateTime.now().toString(), chatId: chatId, senderId: 'me', senderName: 'You',
-      senderAvatar: '', content: content, type: MessageType.text, status: MessageStatus.sending,
-      timestamp: DateTime.now(), isMe: true, replyToContent: _replyingTo?.content, replyToUser: _replyingTo?.senderName,
+      id: DateTime.now().toString(), 
+      chatId: chatId, 
+      senderId: 'me', 
+      senderName: 'You',
+      senderAvatar: '', 
+      content: content, 
+      type: MessageType.text, 
+      status: MessageStatus.sending,
+      timestamp: DateTime.now(), 
+      isMe: true, 
+      replyToContent: _replyingTo?.content, 
+      replyToUser: _replyingTo?.senderName,
     );
     
     _messages[chatId] ??= [];
@@ -183,6 +256,16 @@ class ChatProvider with ChangeNotifier {
     }
     _replyingTo = null;
     notifyListeners();
+
+    // Send to backend
+    try {
+      await _api.post('chats/$chatId/messages', {
+        'content': content,
+        'replyToId': _replyingTo?.id,
+      });
+    } catch (e) {
+      // Handle error - mark message as failed
+    }
   }
 
   void setReplyMessage(Message? message) {
@@ -192,7 +275,11 @@ class ChatProvider with ChangeNotifier {
 
   void markAsRead(String chatId) {
     final idx = _chats.indexWhere((c) => c.id == chatId);
-    if (idx != -1) { _chats[idx] = _chats[idx].copyWith(unreadCount: 0); notifyListeners(); }
+    if (idx != -1) { 
+      _chats[idx] = _chats[idx].copyWith(unreadCount: 0); 
+      _api.post('chats/$chatId/read', {});
+      notifyListeners(); 
+    }
   }
 
   List<Chat> searchChats(String query) {
@@ -205,11 +292,6 @@ class ChatProvider with ChangeNotifier {
       id: 'c1', type: ChatType.individual, name: 'Emma Watson', avatar: 'https://i.pravatar.cc/150?u=emma',
       isPinned: true, participants: [ChatUser(id: 'u2', name: 'Emma', avatar: '')],
       lastMessage: Message(id: 'm1', chatId: 'c1', senderId: 'u2', senderName: 'Emma', senderAvatar: '', content: 'Did you see the new design?', type: MessageType.text, status: MessageStatus.read, timestamp: DateTime.now(), isMe: false),
-    ),
-    Chat(
-      id: 'c2', type: ChatType.group, name: 'Core Team', avatar: 'https://i.pravatar.cc/150?u=team',
-      participants: [], 
-      lastMessage: Message(id: 'm2', chatId: 'c2', senderId: 'u3', senderName: 'John', senderAvatar: '', content: 'Meeting at 10?', type: MessageType.text, status: MessageStatus.read, timestamp: DateTime.now(), isMe: false),
     ),
   ];
 }

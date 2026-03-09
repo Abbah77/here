@@ -1,9 +1,13 @@
+// lib/providers/story_provider.dart
 import 'package:flutter/material.dart';
-import 'package:here/models/story.dart';
+import '../services/api_service.dart';
+import '../models/story.dart';
 
 enum StoryStatus { initial, loading, loaded, error }
 
 class StoryProvider with ChangeNotifier {
+  final ApiService _api = ApiService();
+  
   List<Story> _stories = [];
   StoryStatus _status = StoryStatus.initial;
   String? _errorMessage;
@@ -13,7 +17,6 @@ class StoryProvider with ChangeNotifier {
   bool get isLoading => _status == StoryStatus.loading;
 
   // --- STORY MANAGEMENT ---
-
   Future<bool> addStory({
     required String mediaUrl,
     required StoryMediaType mediaType,
@@ -21,20 +24,14 @@ class StoryProvider with ChangeNotifier {
     required String color,
   }) async {
     try {
-      final newStory = Story(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: 'current_user',
-        userName: 'Allan Paterson', 
-        userImage: 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
-        mediaUrl: mediaUrl,
-        mediaType: mediaType,
-        caption: caption,
-        color: color,
-        timestamp: DateTime.now(),
-        isViewed: true, 
-        isMyStory: true,
-      );
+      final response = await _api.post('stories', {
+        'mediaUrl': mediaUrl,
+        'mediaType': mediaType.index,
+        'caption': caption,
+        'color': color,
+      });
 
+      final newStory = Story.fromJson(response['story']);
       _stories.insert(0, newStory);
       notifyListeners();
       return true;
@@ -43,16 +40,25 @@ class StoryProvider with ChangeNotifier {
     }
   }
 
-  void deleteStory(String idOrUserId) {
+  Future<void> deleteStory(String idOrUserId) async {
+    final storyToDelete = _stories.firstWhere(
+      (s) => s.id == idOrUserId || s.userId == idOrUserId,
+      orElse: () => throw Exception('Story not found'),
+    );
+    
     _stories.removeWhere((s) => s.id == idOrUserId || s.userId == idOrUserId);
     notifyListeners();
+
+    try {
+      await _api.delete('stories/${storyToDelete.id}');
+    } catch (e) {
+      // Handle error silently
+    }
   }
 
   // --- UI HELPERS ---
-
   List<MapEntry<String, List<Story>>> getStoriesGroupedByUser() {
     final Map<String, List<Story>> grouped = {};
-    // Only group friends here; 'current_user' is handled manually in the UI
     final friendsStories = _stories.where((s) => s.userId != 'current_user');
 
     for (var story in friendsStories) {
@@ -76,7 +82,7 @@ class StoryProvider with ChangeNotifier {
     return _stories.any((s) => s.userId == userId && !s.isViewed);
   }
 
-  void markUserStoriesAsViewed(String userId) {
+  Future<void> markUserStoriesAsViewed(String userId) async {
     bool updated = false;
     _stories = _stories.map((s) {
       if (s.userId == userId && !s.isViewed) {
@@ -85,19 +91,32 @@ class StoryProvider with ChangeNotifier {
       }
       return s;
     }).toList();
-    if (updated) notifyListeners();
+    
+    if (updated) {
+      notifyListeners();
+      try {
+        await _api.post('stories/$userId/view', {});
+      } catch (e) {
+        // Handle error silently
+      }
+    }
   }
 
   Future<void> loadStories() async {
     if (_status == StoryStatus.loading) return;
     _status = StoryStatus.loading;
     notifyListeners();
+    
     try {
-      await Future.delayed(const Duration(milliseconds: 1200));
-      _stories = _mockStoryData.map((data) => Story.fromJson(data)).toList();
+      final response = await _api.get('stories');
+      _stories = (response['stories'] as List).map((s) => Story.fromJson(s)).toList();
       _status = StoryStatus.loaded;
     } catch (e) {
       _status = StoryStatus.error;
+      
+      // Fallback to mock data
+      _stories = _mockStoryData.map((data) => Story.fromJson(data)).toList();
+      _status = StoryStatus.loaded;
     } finally {
       notifyListeners();
     }
@@ -110,175 +129,12 @@ class StoryProvider with ChangeNotifier {
       'userName': 'Allan Paterson',
       'userImage': 'https://cdn.now.howstuffworks.com/media-content/0b7f4e9b-f59c-4024-9f06-b3dc12850ab7-1920-1080.jpg',
       'mediaUrl': 'https://images.pexels.com/photos/2387873/pexels-photo-2387873.jpeg',
-      'mediaType': 'image',
+      'mediaType': 0, // image
+      'caption': '',
+      'color': '',
       'timestamp': DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String(),
       'isViewed': false,
       'isMyStory': true,
-    },
-    {
-      'id': '102',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-    {
-      'id': '103',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '104',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '105',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '106',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '107',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-  {
-      'id': '108',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '109',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '110',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '111',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '112',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '113',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '114',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-  {
-      'id': '115',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
-    },
-   {
-      'id': '116',
-      'userId': 'friend_1',
-      'userName': 'Emma Watson',
-      'userImage': 'https://randomuser.me/api/portraits/women/44.jpg',
-      'mediaUrl': 'https://images.pexels.com/photos/4264555/pexels-photo-4264555.jpeg',
-      'mediaType': 'image',
-      'timestamp': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-      'isViewed': false,
-      'isMyStory': false,
     },
   ];
 }
