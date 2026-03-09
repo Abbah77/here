@@ -117,49 +117,53 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
   }
 
   Future<void> _handleSubmit() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    bool success = false;
-    
-    switch (_authMode) {
-      case AuthMode.login:
-        success = await authProvider.signIn(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-        break;
-        
-      case AuthMode.signup:
-        success = await authProvider.signUp(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-        break;
-        
-      case AuthMode.forgot:
-        success = await authProvider.resetPassword(
-          email: _emailController.text.trim(),
-        );
-        if (success && mounted) {
-          _showSuccessSnackBar('Reset link sent! Check your email.');
-          Future.delayed(const Duration(seconds: 2), () {
-            _switchMode(AuthMode.login);
-          });
-        }
-        return;
-    }
-    
-    if (success && mounted && _authMode != AuthMode.forgot) {
-      // DO NOT NAVIGATE - AuthChecker will handle it automatically
-      _showSuccessSnackBar(
-        _authMode == AuthMode.login 
-            ? 'Welcome back!' 
-            : 'Account created successfully!'
+  if (!_formKey.currentState!.validate()) return;
+  
+  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+  bool success = false;
+  
+  switch (_authMode) {
+    case AuthMode.login:
+      success = await authProvider.signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
-    }
+      break;
+      
+    case AuthMode.signup:
+      success = await authProvider.signUp(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      break;
+      
+    case AuthMode.forgot:
+      success = await authProvider.resetPassword(
+        email: _emailController.text.trim(),
+      );
+      if (success && mounted) {
+        _showSuccessSnackBar('Reset link sent! Check your email.');
+        Future.delayed(const Duration(seconds: 2), () {
+          _switchMode(AuthMode.login);
+        });
+      }
+      return;
   }
+  
+  if (success && mounted) {
+    _showSuccessSnackBar(
+      _authMode == AuthMode.login 
+          ? 'Welcome back!' 
+          : 'Account created successfully!'
+    );
+    
+    // ✅ NAVIGATE DIRECTLY HERE
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const MainNavigation()),
+    );
+  }
+}
 
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
