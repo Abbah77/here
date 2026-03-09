@@ -45,7 +45,7 @@ android {
     buildTypes {
         release {
             // Tell the app to use the "release" config we defined above
-            signingConfig = signingConfigs.getByName("release")
+          //  signingConfig = signingConfigs.getByName("release")
             
             isMinifyEnabled = false
             isShrinkResources = false
