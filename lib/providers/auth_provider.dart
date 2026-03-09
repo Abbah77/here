@@ -25,24 +25,28 @@ class AuthProvider with ChangeNotifier {
   }
 
   // --- Auto-login ---
-  Future<void> _autoLogin() async {
-    _setLoading();
-    try {
-      await _api.loadAuthToken();
-      final response = await _api.get('auth/me');
-      
-      if (response != null && response['user'] != null) {
-        _currentUser = User.fromJson(response['user']);
-        _status = AuthStatus.authenticated;
-      } else {
-        _status = AuthStatus.unauthenticated;
-      }
-    } catch (e) {
+Future<void> _autoLogin() async {
+  // We stay in AuthStatus.initial while this runs
+  try {
+    await _api.loadAuthToken(); // Load saved token
+    final response = await _api.get('auth/me'); // Verify with server
+    
+    if (response != null && response['user'] != null) {
+      _currentUser = User.fromJson(response['user']);
+      _status = AuthStatus.authenticated;
+    } else {
       _status = AuthStatus.unauthenticated;
-    } finally {
-      notifyListeners();
     }
+  } catch (e) {
+    // If anything fails (no internet, expired token), go to login
+    debugPrint("Auto-login failed: $e");
+    _status = AuthStatus.unauthenticated;
+  } finally {
+    // This is the trigger that tells AuthChecker to switch screens
+    notifyListeners(); 
   }
+}
+
 
   // --- Sign In ---
   Future<bool> signIn({required String email, required String password}) async {
