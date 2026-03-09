@@ -9,48 +9,25 @@ class AuthChecker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: Provider.of<AuthProvider>(context, listen: false),
-      child: Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
-          // Show loading while checking
-          if (authProvider.status == AuthStatus.initial || 
-              authProvider.status == AuthStatus.loading) {
-            return const _SplashScreen();
-          }
+    final authProvider = Provider.of<AuthProvider>(context);
 
-          // Navigate based on auth state
-          if (authProvider.isAuthenticated) {
-            // Use Future.microtask to ensure navigation happens after build
-            Future.microtask(() {
-              if (Navigator.canPop(context)) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MainNavigation()),
-                );
-              }
-            });
-          } else {
-            Future.microtask(() {
-              if (Navigator.canPop(context)) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AuthPage()),
-                );
-              }
-            });
-          }
+    // Show splash screen while loading
+    if (authProvider.status == AuthStatus.initial || 
+        authProvider.status == AuthStatus.loading) {
+      return const SplashScreen();
+    }
 
-          // Show splash while navigating
-          return const _SplashScreen();
-        },
-      ),
-    );
+    // Return the appropriate screen directly (NO NAVIGATION)
+    if (authProvider.isAuthenticated) {
+      return const MainNavigation();
+    } else {
+      return const AuthPage();
+    }
   }
 }
 
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
