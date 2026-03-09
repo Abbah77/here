@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
+    // REMOVE THIS LINE: id("com.google.gms.google-services")
 }
 
 android {
@@ -61,10 +61,12 @@ flutter {
     source = "../.."
 }
 
-dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-storage")
-}
+// REMOVE ALL FIREBASE DEPENDENCIES BELOW
+// Delete this entire dependencies block:
+// dependencies {
+//     implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
+//     implementation("com.google.firebase:firebase-analytics")
+//     implementation("com.google.firebase:firebase-auth")
+//     implementation("com.google.firebase:firebase-firestore")
+//     implementation("com.google.firebase:firebase-storage")
+// }
