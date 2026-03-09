@@ -7,24 +7,26 @@ import 'package:here/auth_page.dart';
 class AuthChecker extends StatelessWidget {
   const AuthChecker({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+  // auth_checker.dart
 
-    // Show splash screen while loading
-    if (authProvider.status == AuthStatus.initial || 
-        authProvider.status == AuthStatus.loading) {
-      return const SplashScreen();
-    }
+@override
+Widget build(BuildContext context) {
+  final authProvider = Provider.of<AuthProvider>(context);
 
-    // Return the appropriate screen directly (NO NAVIGATION)
-    if (authProvider.isAuthenticated) {
-      return const MainNavigation();
-    } else {
-      return const AuthPage();
-    }
+  // 1. Show Splash while checking (initial) or during explicit loading
+  if (authProvider.status == AuthStatus.initial || 
+      authProvider.status == AuthStatus.loading) {
+    return const SplashScreen(); //
+  }
+
+  // 2. Once checking is done, decide based on authentication
+  if (authProvider.isAuthenticated) {
+    return const MainNavigation(); // Dashboard
+  } else {
+    return const AuthPage(); // Login/Signup
   }
 }
+
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
