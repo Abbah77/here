@@ -9,7 +9,7 @@ class ApiService {
   ApiService._internal();
 
   // Change this URL when your backend changes
-  static const String baseUrl = 'http://your-python-backend.com/api';
+  static const String baseUrl = 'http://10.65.226.255:8000/api';
   
   // Headers
   static const Map<String, String> headers = {
