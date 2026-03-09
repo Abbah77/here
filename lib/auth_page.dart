@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:here/providers/auth_provider.dart';
+import 'package:here/main_navigation.dart';  // Add this line
 
 enum AuthMode { login, signup, forgot }
 
